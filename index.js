@@ -3,8 +3,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { db } from "./config/db.js";
 import authUserRoute from "./routes/authUserRoute.js";
-// import authCustomerRoute from "./routes/authCustomerRoute.js";
-// import providerRoute from "./routes/providerRoute.js";
+import authCustomerRoute from "./routes/authCustomerRoute.js";
+import providerRoute from "./routes/providerRoute.js";
 // import serviceRoute from "./routes/serviceRoute.js";
 
 dotenv.config();
@@ -35,8 +35,8 @@ app.get("/", (req, res) => {
 });
 
 app.use(authUserRoute);
-// app.use(authCustomerRoute);
-// app.use(providerRoute);
+app.use(authCustomerRoute);
+app.use(providerRoute);
 // app.use(serviceRoute);
 
 app.listen(PORT, () => {
