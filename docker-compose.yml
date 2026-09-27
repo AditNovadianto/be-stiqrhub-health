@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    container_name: stiqrhub-health-backend
+    restart: always
+
+    # CARA BARU: Load variables from file
+    env_file:
+      - ./.env
+
+    networks:
+      - stiqrhub-network
+
+# Service DB dihapus (karena pakai shared DB)
+
+networks:
+  stiqrhub-network:
+    external: true

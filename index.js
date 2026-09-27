@@ -6,6 +6,7 @@ import authUserRoute from "./routes/authUserRoute.js";
 import authCustomerRoute from "./routes/authCustomerRoute.js";
 import providerRoute from "./routes/providerRoute.js";
 import serviceRoute from "./routes/serviceRoute.js";
+import danaRoute from "./3rd/routes/danaRoute.js";
 
 dotenv.config();
 
@@ -38,6 +39,7 @@ app.use(authUserRoute);
 app.use(authCustomerRoute);
 app.use(providerRoute);
 app.use(serviceRoute);
+app.use("/api/dana", danaRoute);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
