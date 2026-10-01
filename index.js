@@ -8,7 +8,7 @@ import authProviderUserRoute from "./routes/authProviderUserRoute.js";
 import providerRoute from "./routes/providerRoute.js";
 import serviceRoute from "./routes/serviceRoute.js";
 import detailServiceRoute from "./routes/detailServiceRoute.js";
-// import orderRoute from "./routes/orderRoute.js";
+import orderRoute from "./routes/orderRoute.js";
 import danaRoute from "./3rd/routes/danaRoute.js";
 // import danaPaymentRoute from "./3rd/routes/danaPaymentRoute.js";
 // import { finishNotify } from "./3rd/controllers/danaPaymentController.js";
@@ -52,7 +52,7 @@ app.use(authProviderUserRoute);
 app.use(providerRoute);
 app.use(serviceRoute);
 app.use(detailServiceRoute);
-// app.use(orderRoute);
+app.use(orderRoute);
 app.use("/api/dana", danaRoute);
 // app.use("/api/dana/payment", danaPaymentRoute);
 
