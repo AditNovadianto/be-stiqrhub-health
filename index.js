@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { db } from "./config/db.js";
 import authUserRoute from "./routes/authUserRoute.js";
 import authCustomerRoute from "./routes/authCustomerRoute.js";
-// import authProviderUserRoute from "./routes/authProviderUserRoute.js";
+import authProviderUserRoute from "./routes/authProviderUserRoute.js";
 import providerRoute from "./routes/providerRoute.js";
 import serviceRoute from "./routes/serviceRoute.js";
 import detailServiceRoute from "./routes/detailServiceRoute.js";
@@ -48,7 +48,7 @@ app.get("/", (req, res) => {
 
 app.use(authUserRoute);
 app.use(authCustomerRoute);
-// app.use(authProviderUserRoute);
+app.use(authProviderUserRoute);
 app.use(providerRoute);
 app.use(serviceRoute);
 app.use(detailServiceRoute);
