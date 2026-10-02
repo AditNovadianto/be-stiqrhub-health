@@ -10,8 +10,8 @@ import serviceRoute from "./routes/serviceRoute.js";
 import detailServiceRoute from "./routes/detailServiceRoute.js";
 import orderRoute from "./routes/orderRoute.js";
 import danaRoute from "./3rd/routes/danaRoute.js";
-// import danaPaymentRoute from "./3rd/routes/danaPaymentRoute.js";
-// import { finishNotify } from "./3rd/controllers/danaPaymentController.js";
+import danaPaymentRoute from "./3rd/routes/danaPaymentRoute.js";
+import { finishNotify } from "./3rd/controllers/danaPaymentController.js";
 
 dotenv.config();
 
@@ -54,9 +54,9 @@ app.use(serviceRoute);
 app.use(detailServiceRoute);
 app.use(orderRoute);
 app.use("/api/dana", danaRoute);
-// app.use("/api/dana/payment", danaPaymentRoute);
+app.use("/api/dana/payment", danaPaymentRoute);
 
-// app.post("/v1.0/debit/notify", finishNotify);
+app.post("/v1.0/debit/notify", finishNotify);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
