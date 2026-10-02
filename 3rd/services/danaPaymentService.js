@@ -17,21 +17,15 @@ import {
   generateSnapSignature,
 } from "../utils/danaSnapSignature.js";
 
-const PAYMENT_PATH =
-  "/rest/redirection/v1.0/debit/payment-host-to-host";
+const PAYMENT_PATH = "/rest/redirection/v1.0/debit/payment-host-to-host";
 
-const APPLY_OTT_PATH =
-  "/rest/v1.1/qr/apply-ott";
+const APPLY_OTT_PATH = "/rest/v1.1/qr/apply-ott";
 
 // ============================================================
 // ERROR HELPER
 // ============================================================
 
-function errorWithStatus(
-  message,
-  statusCode = 500,
-  danaResponseCode = null
-) {
+function errorWithStatus(message, statusCode = 500, danaResponseCode = null) {
   const error = new Error(message);
 
   error.statusCode = statusCode;
@@ -44,37 +38,19 @@ function errorWithStatus(
 // LOGGING HELPERS
 // ============================================================
 
-function maskValue(
-  value,
-  visibleStart = 8,
-  visibleEnd = 6
-) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
+function maskValue(value, visibleStart = 8, visibleEnd = 6) {
+  if (value === null || value === undefined || value === "") {
     return null;
   }
 
   const stringValue = String(value);
 
-  if (
-    stringValue.length <=
-    visibleStart + visibleEnd
-  ) {
+  if (stringValue.length <= visibleStart + visibleEnd) {
     return "***";
   }
 
   return (
-    stringValue.slice(
-      0,
-      visibleStart
-    ) +
-    "..." +
-    stringValue.slice(
-      -visibleEnd
-    )
+    stringValue.slice(0, visibleStart) + "..." + stringValue.slice(-visibleEnd)
   );
 }
 
@@ -95,16 +71,10 @@ function maskUrl(value) {
     ];
 
     for (const key of sensitiveParams) {
-      if (
-        url.searchParams.has(key)
-      ) {
-        const current =
-          url.searchParams.get(key);
+      if (url.searchParams.has(key)) {
+        const current = url.searchParams.get(key);
 
-        url.searchParams.set(
-          key,
-          maskValue(current)
-        );
+        url.searchParams.set(key, maskValue(current));
       }
     }
 
@@ -114,203 +84,118 @@ function maskUrl(value) {
   }
 }
 
-function sanitizeHeaders(
-  headers = {}
-) {
+function sanitizeHeaders(headers = {}) {
   const result = {
     ...headers,
   };
 
-  if (
-    result["X-SIGNATURE"]
-  ) {
-    result["X-SIGNATURE"] =
-      maskValue(
-        result["X-SIGNATURE"],
-        10,
-        6
-      );
+  if (result["X-SIGNATURE"]) {
+    result["X-SIGNATURE"] = maskValue(result["X-SIGNATURE"], 10, 6);
   }
 
-  if (
-    result[
-      "Authorization-Customer"
-    ]
-  ) {
-    result[
-      "Authorization-Customer"
-    ] =
-      "Bearer ***MASKED***";
+  if (result["Authorization-Customer"]) {
+    result["Authorization-Customer"] = "Bearer ***MASKED***";
   }
 
   return result;
 }
 
 function sanitizeObject(value) {
-  if (
-    value === null ||
-    value === undefined
-  ) {
+  if (value === null || value === undefined) {
     return value;
   }
 
-  if (
-    Array.isArray(value)
-  ) {
-    return value.map(
-      sanitizeObject
-    );
+  if (Array.isArray(value)) {
+    return value.map(sanitizeObject);
   }
 
-  if (
-    typeof value !== "object"
-  ) {
+  if (typeof value !== "object") {
     return value;
   }
 
   const result = {};
 
-  for (
-    const [
-      key,
-      item,
-    ] of Object.entries(value)
-  ) {
-    const normalizedKey =
-      key.toLowerCase();
+  for (const [key, item] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase();
 
     if (
-      normalizedKey ===
-        "access_token" ||
-      normalizedKey ===
-        "accesstoken" ||
-      normalizedKey ===
-        "refresh_token" ||
-      normalizedKey ===
-        "refreshtoken" ||
-      normalizedKey ===
-        "ott"
+      normalizedKey === "access_token" ||
+      normalizedKey === "accesstoken" ||
+      normalizedKey === "refresh_token" ||
+      normalizedKey === "refreshtoken" ||
+      normalizedKey === "ott"
     ) {
-      result[key] =
-        maskValue(item);
+      result[key] = maskValue(item);
 
       continue;
     }
 
-    if (
-      normalizedKey === "value" &&
-      value.resourceType === "OTT"
-    ) {
-      result[key] =
-        maskValue(item);
+    if (normalizedKey === "value" && value.resourceType === "OTT") {
+      result[key] = maskValue(item);
 
       continue;
     }
 
-    if (
-      normalizedKey.includes(
-        "redirecturl"
-      )
-    ) {
-      result[key] =
-        maskUrl(item);
+    if (normalizedKey.includes("redirecturl")) {
+      result[key] = maskUrl(item);
 
       continue;
     }
 
-    result[key] =
-      sanitizeObject(item);
+    result[key] = sanitizeObject(item);
   }
 
   return result;
 }
 
-function logSection(
-  title,
-  payload
-) {
-  console.log(
-    "\n============================================================"
-  );
+function logSection(title, payload) {
+  console.log("\n============================================================");
 
   console.log(title);
 
-  if (
-    payload !== undefined
-  ) {
-    console.dir(
-      payload,
-      {
-        depth: null,
-        colors: true,
-      }
-    );
+  if (payload !== undefined) {
+    console.dir(payload, {
+      depth: null,
+      colors: true,
+    });
   }
 
-  console.log(
-    "============================================================\n"
-  );
+  console.log("============================================================\n");
 }
 
 // ============================================================
 // GENERAL HELPERS
 // ============================================================
 
-function addMinutes(
-  date,
-  minutes
-) {
-  return new Date(
-    date.getTime() +
-      minutes *
-        60 *
-        1000
-  );
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60 * 1000);
 }
 
 function formatDanaDate(date) {
-  const formatter =
-    new Intl.DateTimeFormat(
-      "en-CA",
-      {
-        timeZone:
-          "Asia/Jakarta",
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
 
-        year:
-          "numeric",
+    year: "numeric",
 
-        month:
-          "2-digit",
+    month: "2-digit",
 
-        day:
-          "2-digit",
+    day: "2-digit",
 
-        hour:
-          "2-digit",
+    hour: "2-digit",
 
-        minute:
-          "2-digit",
+    minute: "2-digit",
 
-        second:
-          "2-digit",
+    second: "2-digit",
 
-        hour12:
-          false,
-      }
-    );
+    hour12: false,
+  });
 
-  const parts =
-    formatter.formatToParts(
-      date
-    );
+  const parts = formatter.formatToParts(date);
 
   const value = {};
 
-  for (
-    const part of parts
-  ) {
-    value[part.type] =
-      part.value;
+  for (const part of parts) {
+    value[part.type] = part.value;
   }
 
   return (
@@ -320,30 +205,14 @@ function formatDanaDate(date) {
 }
 
 function toMysqlDate(date) {
-  return date
-    .toISOString()
-    .slice(
-      0,
-      19
-    )
-    .replace(
-      "T",
-      " "
-    );
+  return date.toISOString().slice(0, 19).replace("T", " ");
 }
 
 function normalizeAmount(value) {
-  const amount =
-    Number(value);
+  const amount = Number(value);
 
-  if (
-    !Number.isFinite(amount) ||
-    amount <= 0
-  ) {
-    throw errorWithStatus(
-      "Total order tidak valid",
-      500
-    );
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw errorWithStatus("Total order tidak valid", 500);
   }
 
   return amount.toFixed(2);
@@ -353,12 +222,9 @@ function normalizeAmount(value) {
 // GET CUSTOMER DANA ACCESS TOKEN
 // ============================================================
 
-async function getCustomerDanaAccessToken(
-  idCustomer
-) {
-  const [rows] =
-    await db.query(
-      `
+async function getCustomerDanaAccessToken(idCustomer) {
+  const [rows] = await db.query(
+    `
         SELECT
           access_token,
           access_token_expires_at
@@ -366,83 +232,41 @@ async function getCustomerDanaAccessToken(
         WHERE id_customer = ?
         LIMIT 1
       `,
-      [
-        idCustomer,
-      ]
-    );
+    [idCustomer],
+  );
 
-  if (
-    rows.length === 0
-  ) {
-    throw errorWithStatus(
-      "Customer belum menghubungkan akun DANA",
-      409
-    );
+  if (rows.length === 0) {
+    throw errorWithStatus("Customer belum menghubungkan akun DANA", 409);
   }
 
-  const customerAuth =
-    rows[0];
+  const customerAuth = rows[0];
 
-  if (
-    !customerAuth.access_token
-  ) {
-    throw errorWithStatus(
-      "Access token DANA tidak tersedia",
-      409
-    );
+  if (!customerAuth.access_token) {
+    throw errorWithStatus("Access token DANA tidak tersedia", 409);
   }
 
-  if (
-    customerAuth
-      .access_token_expires_at
-  ) {
-    const expiredAt =
-      new Date(
-        customerAuth
-          .access_token_expires_at
-      );
+  if (customerAuth.access_token_expires_at) {
+    const expiredAt = new Date(customerAuth.access_token_expires_at);
 
-    if (
-      !Number.isNaN(
-        expiredAt.getTime()
-      ) &&
-      expiredAt <=
-        new Date()
-    ) {
-      throw errorWithStatus(
-        "Access token DANA customer sudah expired",
-        401
-      );
+    if (!Number.isNaN(expiredAt.getTime()) && expiredAt <= new Date()) {
+      throw errorWithStatus("Access token DANA customer sudah expired", 401);
     }
   }
 
   try {
-    const token =
-      decryptToken(
-        customerAuth
-          .access_token
-      );
+    const token = decryptToken(customerAuth.access_token);
 
-    logSection(
-      "[DANA CUSTOMER TOKEN READY]",
-      {
-        idCustomer,
+    logSection("[DANA CUSTOMER TOKEN READY]", {
+      idCustomer,
 
-        token:
-          maskValue(token),
+      token: maskValue(token),
 
-        expiresAt:
-          customerAuth
-            .access_token_expires_at,
-      }
-    );
+      expiresAt: customerAuth.access_token_expires_at,
+    });
 
     return token;
   } catch (error) {
-    throw errorWithStatus(
-      "Access token DANA tidak dapat dibaca",
-      500
-    );
+    throw errorWithStatus("Access token DANA tidak dapat dibaca", 500);
   }
 }
 
@@ -456,197 +280,120 @@ async function danaSnapRequest({
   customerAccessToken = null,
   deviceId = null,
 }) {
-  const rawBody =
-    JSON.stringify(body);
+  const rawBody = JSON.stringify(body);
 
-  const timestamp =
-    getJakartaTimestamp();
+  const timestamp = getJakartaTimestamp();
 
-  const externalId =
-    createExternalId();
+  const externalId = createExternalId();
 
-  const signature =
-    generateSnapSignature({
-      method:
-        "POST",
+  const signature = generateSnapSignature({
+    method: "POST",
 
-      path,
+    path,
 
-      rawBody,
+    rawBody,
 
-      timestamp,
+    timestamp,
 
-      privateKey:
-        danaPaymentConfig
-          .privateKey,
-    });
+    privateKey: danaPaymentConfig.privateKey,
+  });
 
   const headers = {
-    "Content-Type":
-      "application/json",
+    "Content-Type": "application/json",
 
-    "X-TIMESTAMP":
-      timestamp,
+    "X-TIMESTAMP": timestamp,
 
-    "X-SIGNATURE":
-      signature,
+    "X-SIGNATURE": signature,
 
-    "X-PARTNER-ID":
-      danaPaymentConfig
-        .partnerId,
+    "X-PARTNER-ID": danaPaymentConfig.partnerId,
 
-    "X-EXTERNAL-ID":
-      externalId,
+    "X-EXTERNAL-ID": externalId,
 
-    "CHANNEL-ID":
-      danaPaymentConfig
-        .channelId,
+    "CHANNEL-ID": danaPaymentConfig.channelId,
   };
 
-  if (
-    danaPaymentConfig.origin
-  ) {
-    headers.ORIGIN =
-      danaPaymentConfig.origin;
+  if (danaPaymentConfig.origin) {
+    headers.ORIGIN = danaPaymentConfig.origin;
   }
 
-  if (
-    customerAccessToken
-  ) {
-    headers[
-      "Authorization-Customer"
-    ] =
-      `Bearer ${customerAccessToken}`;
+  if (customerAccessToken) {
+    headers["Authorization-Customer"] = `Bearer ${customerAccessToken}`;
   }
 
-  if (
-    deviceId
-  ) {
-    headers[
-      "X-DEVICE-ID"
-    ] =
-      deviceId;
+  if (deviceId) {
+    headers["X-DEVICE-ID"] = deviceId;
   }
 
-  const url =
-    `${danaPaymentConfig.baseUrl}${path}`;
+  const url = `${danaPaymentConfig.baseUrl}${path}`;
 
-  logSection(
-    "[DANA OUTGOING REQUEST]",
-    {
-      method:
-        "POST",
+  logSection("[DANA OUTGOING REQUEST]", {
+    method: "POST",
 
-      path,
+    path,
 
-      url,
+    url,
 
-      timestamp,
+    timestamp,
 
-      externalId,
+    externalId,
 
-      headers:
-        sanitizeHeaders(
-          headers
-        ),
+    headers: sanitizeHeaders(headers),
 
-      body:
-        sanitizeObject(
-          body
-        ),
-    }
-  );
+    body: sanitizeObject(body),
+  });
 
-  const startedAt =
-    Date.now();
+  const startedAt = Date.now();
 
   let response;
 
   try {
-    response =
-      await fetch(
-        url,
-        {
-          method:
-            "POST",
+    response = await fetch(url, {
+      method: "POST",
 
-          headers,
+      headers,
 
-          body:
-            rawBody,
+      body: rawBody,
 
-          signal:
-            AbortSignal.timeout(
-              15000
-            ),
-        }
-      );
+      signal: AbortSignal.timeout(15000),
+    });
   } catch (error) {
-    logSection(
-      "[DANA NETWORK ERROR]",
-      {
-        path,
+    logSection("[DANA NETWORK ERROR]", {
+      path,
 
-        message:
-          error.message,
+      message: error.message,
 
-        durationMs:
-          Date.now() -
-          startedAt,
-      }
-    );
+      durationMs: Date.now() - startedAt,
+    });
 
-    throw errorWithStatus(
-      "Tidak dapat terhubung ke DANA",
-      502
-    );
+    throw errorWithStatus("Tidak dapat terhubung ke DANA", 502);
   }
 
-  const responseText =
-    await response.text();
+  const responseText = await response.text();
 
   let data;
 
   try {
-    data =
-      JSON.parse(
-        responseText
-      );
+    data = JSON.parse(responseText);
   } catch {
-    throw errorWithStatus(
-      "Response DANA bukan JSON valid",
-      502
-    );
+    throw errorWithStatus("Response DANA bukan JSON valid", 502);
   }
 
-  logSection(
-    "[DANA INCOMING RESPONSE]",
-    {
-      path,
+  logSection("[DANA INCOMING RESPONSE]", {
+    path,
 
-      httpStatus:
-        response.status,
+    httpStatus: response.status,
 
-      responseCode:
-        data.responseCode ||
-        null,
+    responseCode: data.responseCode || null,
 
-      responseMessage:
-        data.responseMessage ||
-        null,
+    responseMessage: data.responseMessage || null,
 
-      durationMs:
-        Date.now() -
-        startedAt,
+    durationMs: Date.now() - startedAt,
 
-      body:
-        sanitizeObject(data),
-    }
-  );
+    body: sanitizeObject(data),
+  });
 
   return {
-    httpStatus:
-      response.status,
+    httpStatus: response.status,
 
     data,
   };
@@ -656,111 +403,63 @@ async function danaSnapRequest({
 // APPLY OTT
 // ============================================================
 
-async function applyOtt({
-  accessToken,
-  deviceId,
-}) {
-  if (
-    typeof deviceId !==
-      "string" ||
-    !deviceId.trim()
-  ) {
-    throw errorWithStatus(
-      "Device ID wajib diisi untuk Apply OTT",
-      400
-    );
+async function applyOtt({ accessToken, deviceId }) {
+  if (typeof deviceId !== "string" || !deviceId.trim()) {
+    throw errorWithStatus("Device ID wajib diisi untuk Apply OTT", 400);
   }
 
-  const normalizedDeviceId =
-    deviceId.trim();
+  const normalizedDeviceId = deviceId.trim();
 
   const body = {
-    userResources: [
-      "OTT",
-    ],
+    userResources: ["OTT"],
 
     additionalInfo: {
       accessToken,
     },
   };
 
-  const {
-    data,
-  } =
-    await danaSnapRequest({
-      path:
-        APPLY_OTT_PATH,
+  const { data } = await danaSnapRequest({
+    path: APPLY_OTT_PATH,
 
-      body,
+    body,
 
-      customerAccessToken:
-        accessToken,
+    customerAccessToken: accessToken,
 
-      deviceId:
-        normalizedDeviceId,
-    });
+    deviceId: normalizedDeviceId,
+  });
 
-  if (
-    data.responseCode !==
-    "2004900"
-  ) {
+  if (data.responseCode !== "2004900") {
     throw errorWithStatus(
-      data.responseMessage ||
-        "Apply OTT DANA gagal",
+      data.responseMessage || "Apply OTT DANA gagal",
 
       502,
 
-      data.responseCode ||
-        null
+      data.responseCode || null,
     );
   }
 
-  const resource =
-    Array.isArray(
-      data.userResources
-    )
-      ? data.userResources.find(
-          (item) =>
-            item.resourceType ===
-            "OTT"
-        )
-      : null;
+  const resource = Array.isArray(data.userResources)
+    ? data.userResources.find((item) => item.resourceType === "OTT")
+    : null;
 
-  if (
-    !resource ||
-    !resource.value
-  ) {
-    throw errorWithStatus(
-      "OTT tidak ditemukan pada response DANA",
-      502
-    );
+  if (!resource || !resource.value) {
+    throw errorWithStatus("OTT tidak ditemukan pada response DANA", 502);
   }
 
-  logSection(
-    "[DANA APPLY OTT SUCCESS]",
-    {
-      responseCode:
-        data.responseCode,
+  logSection("[DANA APPLY OTT SUCCESS]", {
+    responseCode: data.responseCode,
 
-      resourceType:
-        resource.resourceType,
+    resourceType: resource.resourceType,
 
-      ott:
-        maskValue(
-          resource.value
-        ),
+    ott: maskValue(resource.value),
 
-      deviceId:
-        normalizedDeviceId,
-    }
-  );
+    deviceId: normalizedDeviceId,
+  });
 
   return {
-    ott:
-      resource.value,
+    ott: resource.value,
 
-    raw:
-      data,
+    raw: data,
   };
 }
 
@@ -768,355 +467,199 @@ async function applyOtt({
 // CREATE DANA PAYMENT - BINDING
 // ============================================================
 
-export async function createDanaPayment({
-  idOrder,
-  idCustomer,
-  deviceId,
-}) {
+export async function createDanaPayment({ idOrder, idCustomer, deviceId }) {
   validateDanaPaymentConfig();
 
-  logSection(
-    "[DANA CREATE PAYMENT START]",
-    {
-      flow:
-        "BINDING",
+  logSection("[DANA CREATE PAYMENT START]", {
+    flow: "BINDING",
 
-      idOrder,
+    idOrder,
 
-      idCustomer,
+    idCustomer,
 
-      deviceId,
-    }
-  );
+    deviceId,
+  });
 
-  if (
-    typeof idOrder !==
-      "string" ||
-    !idOrder.trim()
-  ) {
-    throw errorWithStatus(
-      "ID order wajib diisi",
-      400
-    );
+  if (typeof idOrder !== "string" || !idOrder.trim()) {
+    throw errorWithStatus("ID order wajib diisi", 400);
   }
 
-  if (
-    typeof deviceId !==
-      "string" ||
-    !deviceId.trim()
-  ) {
-    throw errorWithStatus(
-      "Device ID wajib diisi",
-      400
-    );
+  if (typeof deviceId !== "string" || !deviceId.trim()) {
+    throw errorWithStatus("Device ID wajib diisi", 400);
   }
 
   // ==========================================================
   // GET ORDER
   // ==========================================================
 
-  const order =
-    await orderModel
-      .getOrderById(
-        idOrder.trim()
-      );
+  const order = await orderModel.getOrderById(idOrder.trim());
 
   if (!order) {
-    throw errorWithStatus(
-      "Order tidak ditemukan",
-      404
-    );
+    throw errorWithStatus("Order tidak ditemukan", 404);
   }
 
-  logSection(
-    "[DANA ORDER DATA]",
-    {
-      id_order:
-        order.id_order,
+  logSection("[DANA ORDER DATA]", {
+    id_order: order.id_order,
 
-      id_customer:
-        order.id_customer,
+    id_customer: order.id_customer,
 
-      id_service:
-        order.id_service,
+    id_service: order.id_service,
 
-      name_service:
-        order.name_service,
+    name_service: order.name_service,
 
-      payment_method:
-        order.payment_method,
+    payment_method: order.payment_method,
 
-      payment_status:
-        order.payment_status,
+    payment_status: order.payment_status,
 
-      order_status:
-        order.order_status,
+    order_status: order.order_status,
 
-      total:
-        order.total,
+    total: order.total,
 
-      dana_payment_id:
-        order.dana_payment_id ||
-        null,
-    }
-  );
+    dana_payment_id: order.dana_payment_id || null,
+  });
 
   // ==========================================================
   // VALIDATE CUSTOMER
   // ==========================================================
 
-  if (
-    Number(
-      order.id_customer
-    ) !==
-    Number(
-      idCustomer
-    )
-  ) {
-    throw errorWithStatus(
-      "Order bukan milik customer ini",
-      403
-    );
+  if (Number(order.id_customer) !== Number(idCustomer)) {
+    throw errorWithStatus("Order bukan milik customer ini", 403);
   }
 
-  if (
-    String(
-      order.payment_method
-    ).toUpperCase() !==
-    "DANA"
-  ) {
-    throw errorWithStatus(
-      "Payment method order bukan DANA",
-      409
-    );
+  if (String(order.payment_method).toUpperCase() !== "DANA") {
+    throw errorWithStatus("Payment method order bukan DANA", 409);
   }
 
-  if (
-    order.payment_status !==
-      "PENDING" ||
-    order.order_status !==
-      "PENDING"
-  ) {
-    throw errorWithStatus(
-      "Order tidak dalam status PENDING",
-      409
-    );
+  if (order.payment_status !== "PENDING" || order.order_status !== "PENDING") {
+    throw errorWithStatus("Order tidak dalam status PENDING", 409);
   }
 
-  if (
-    order.dana_payment_id
-  ) {
-    throw errorWithStatus(
-      "Payment DANA untuk order ini sudah dibuat",
-      409
-    );
+  if (order.dana_payment_id) {
+    throw errorWithStatus("Payment DANA untuk order ini sudah dibuat", 409);
   }
 
   // ==========================================================
   // DANA CUSTOMER ACCESS TOKEN
   // ==========================================================
 
-  const accessToken =
-    await getCustomerDanaAccessToken(
-      idCustomer
-    );
+  const accessToken = await getCustomerDanaAccessToken(idCustomer);
 
   // ==========================================================
   // EXPIRY
   // ==========================================================
 
-  const expiryMinutes =
-    Number(
-      danaPaymentConfig
-        .expiryMinutes
-    );
+  const expiryMinutes = Number(danaPaymentConfig.expiryMinutes);
 
-  if (
-    !Number.isFinite(
-      expiryMinutes
-    ) ||
-    expiryMinutes <= 0
-  ) {
-    throw errorWithStatus(
-      "DANA_PAYMENT_EXPIRY_MINUTES tidak valid",
-      500
-    );
+  if (!Number.isFinite(expiryMinutes) || expiryMinutes <= 0) {
+    throw errorWithStatus("DANA_PAYMENT_EXPIRY_MINUTES tidak valid", 500);
   }
 
-  const expiredAt =
-    addMinutes(
-      new Date(),
-      expiryMinutes
-    );
+  const expiredAt = addMinutes(new Date(), expiryMinutes);
 
   // ==========================================================
   // 1. DIRECT DEBIT PAYMENT - BINDING
   // ==========================================================
 
   const paymentBody = {
-    partnerReferenceNo:
-      order.id_order,
+    partnerReferenceNo: order.id_order,
 
-    merchantId:
-      danaPaymentConfig
-        .merchantId,
+    merchantId: danaPaymentConfig.merchantId,
 
-    validUpTo:
-      formatDanaDate(
-        expiredAt
-      ),
+    validUpTo: formatDanaDate(expiredAt),
 
     amount: {
-      value:
-        normalizeAmount(
-          order.total
-        ),
+      value: normalizeAmount(order.total),
 
-      currency:
-        "IDR",
+      currency: "IDR",
     },
 
     urlParams: [
       {
-        url:
-          danaPaymentConfig
-            .notifyUrl,
+        url: danaPaymentConfig.notifyUrl,
 
-        type:
-          "NOTIFICATION",
+        type: "NOTIFICATION",
 
-        isDeeplink:
-          "N",
+        isDeeplink: "N",
       },
     ],
 
     additionalInfo: {
-      productCode:
-        danaPaymentConfig
-          .productCode,
+      productCode: danaPaymentConfig.productCode,
 
       order: {
-        orderTitle:
-          String(
-            order.name_service ||
-              "STIQR Health Service"
-          ).slice(
-            0,
-            64
-          ),
+        orderTitle: String(order.name_service || "STIQR Health Service").slice(
+          0,
+          64,
+        ),
       },
 
-      mcc:
-        danaPaymentConfig
-          .mcc,
+      mcc: danaPaymentConfig.mcc,
 
       /**
        * Mengikuti reference support
        * DANA untuk Mini Program.
        */
       envInfo: {
-        sourcePlatform:
-          "IPG",
+        sourcePlatform: "IPG",
 
-        terminalType:
-          "MINI_PROGRAM",
+        terminalType: "MINI_PROGRAM",
 
-        orderTerminalType:
-          "APP",
+        orderTerminalType: "APP",
       },
     },
   };
 
-  logSection(
-    "[DANA PAYMENT BODY READY]",
-    paymentBody
-  );
+  logSection("[DANA PAYMENT BODY READY]", paymentBody);
 
-  const {
-    data:
-      paymentResponse,
-  } =
-    await danaSnapRequest({
-      path:
-        PAYMENT_PATH,
+  const { data: paymentResponse } = await danaSnapRequest({
+    path: PAYMENT_PATH,
 
-      body:
-        paymentBody,
-    });
+    body: paymentBody,
+  });
 
-  if (
-    paymentResponse
-      .responseCode !==
-    "2005400"
-  ) {
+  if (paymentResponse.responseCode !== "2005400") {
     throw errorWithStatus(
-      paymentResponse
-        .responseMessage ||
-        "Create payment DANA gagal",
+      paymentResponse.responseMessage || "Create payment DANA gagal",
 
       422,
 
-      paymentResponse
-        .responseCode ||
-        null
+      paymentResponse.responseCode || null,
     );
   }
 
-  if (
-    !paymentResponse
-      .referenceNo
-  ) {
-    throw errorWithStatus(
-      "referenceNo tidak tersedia dari DANA",
-      502
-    );
+  if (!paymentResponse.referenceNo) {
+    throw errorWithStatus("referenceNo tidak tersedia dari DANA", 502);
   }
 
-  if (
-    !paymentResponse
-      .webRedirectUrl
-  ) {
-    throw errorWithStatus(
-      "webRedirectUrl tidak tersedia dari DANA",
-      502
-    );
+  if (!paymentResponse.webRedirectUrl) {
+    throw errorWithStatus("webRedirectUrl tidak tersedia dari DANA", 502);
   }
 
   // ==========================================================
   // 2. SAVE DANA REFERENCE
   // ==========================================================
 
-  const updated =
-    await orderModel
-      .updateDanaPaymentInfo(
-        order.id_order,
+  const updated = await orderModel.updateDanaPaymentInfo(
+    order.id_order,
 
-        paymentResponse
-          .referenceNo,
+    paymentResponse.referenceNo,
 
-        toMysqlDate(
-          expiredAt
-        )
-      );
+    toMysqlDate(expiredAt),
+  );
 
   if (!updated) {
-    throw errorWithStatus(
-      "Gagal menyimpan informasi payment DANA",
-      500
-    );
+    throw errorWithStatus("Gagal menyimpan informasi payment DANA", 500);
   }
 
   // ==========================================================
   // 3. APPLY OTT
   // ==========================================================
 
-  const ottResponse =
-    await applyOtt({
-      accessToken,
+  const ottResponse = await applyOtt({
+    accessToken,
 
-      deviceId:
-        deviceId.trim(),
-    });
+    deviceId: deviceId.trim(),
+  });
 
   // ==========================================================
   // 4. RESULT
@@ -1137,76 +680,42 @@ export async function createDanaPayment({
    */
 
   const result = {
-    id_order:
-      order.id_order,
+    id_order: order.id_order,
 
-    dana_payment_id:
-      paymentResponse
-        .referenceNo,
+    dana_payment_id: paymentResponse.referenceNo,
 
-    partner_reference_no:
-      paymentResponse
-        .partnerReferenceNo ||
-      order.id_order,
+    partner_reference_no: paymentResponse.partnerReferenceNo || order.id_order,
 
-    payment_status:
-      "PENDING",
+    payment_status: "PENDING",
 
-    order_status:
-      "PENDING",
+    order_status: "PENDING",
 
-    payment_expired_at:
-      expiredAt,
+    payment_expired_at: expiredAt,
 
-    web_redirect_url:
-      paymentResponse
-        .webRedirectUrl,
+    web_redirect_url: paymentResponse.webRedirectUrl,
 
-    ott:
-      ottResponse.ott,
+    ott: ottResponse.ott,
   };
 
-  logSection(
-    "[DANA CREATE PAYMENT COMPLETE]",
-    {
-      flow:
-        "BINDING",
+  logSection("[DANA CREATE PAYMENT COMPLETE]", {
+    flow: "BINDING",
 
-      id_order:
-        result.id_order,
+    id_order: result.id_order,
 
-      dana_payment_id:
-        result
-          .dana_payment_id,
+    dana_payment_id: result.dana_payment_id,
 
-      partner_reference_no:
-        result
-          .partner_reference_no,
+    partner_reference_no: result.partner_reference_no,
 
-      payment_status:
-        result
-          .payment_status,
+    payment_status: result.payment_status,
 
-      order_status:
-        result
-          .order_status,
+    order_status: result.order_status,
 
-      payment_expired_at:
-        result
-          .payment_expired_at,
+    payment_expired_at: result.payment_expired_at,
 
-      web_redirect_url:
-        maskUrl(
-          result
-            .web_redirect_url
-        ),
+    web_redirect_url: maskUrl(result.web_redirect_url),
 
-      ott:
-        maskValue(
-          result.ott
-        ),
-    }
-  );
+    ott: maskValue(result.ott),
+  });
 
   return result;
 }
@@ -1215,15 +724,8 @@ export async function createDanaPayment({
 // PROCESS FINISH NOTIFY
 // ============================================================
 
-export async function processDanaFinishNotify(
-  payload
-) {
-  logSection(
-    "[DANA FINISH NOTIFY PROCESS START]",
-    sanitizeObject(
-      payload
-    )
-  );
+export async function processDanaFinishNotify(payload) {
+  logSection("[DANA FINISH NOTIFY PROCESS START]", sanitizeObject(payload));
 
   const {
     originalPartnerReferenceNo,
@@ -1232,8 +734,7 @@ export async function processDanaFinishNotify(
     amount,
     latestTransactionStatus,
     finishedTime,
-  } =
-    payload || {};
+  } = payload || {};
 
   if (
     !originalPartnerReferenceNo ||
@@ -1242,80 +743,39 @@ export async function processDanaFinishNotify(
     !amount ||
     !latestTransactionStatus
   ) {
-    throw errorWithStatus(
-      "Payload DANA Finish Notify tidak lengkap",
-      400
-    );
+    throw errorWithStatus("Payload DANA Finish Notify tidak lengkap", 400);
   }
 
-  if (
-    merchantId !==
-    danaPaymentConfig
-      .merchantId
-  ) {
-    throw errorWithStatus(
-      "Merchant ID DANA tidak sesuai",
-      401
-    );
+  if (merchantId !== danaPaymentConfig.merchantId) {
+    throw errorWithStatus("Merchant ID DANA tidak sesuai", 401);
   }
 
-  const order =
-    await orderModel
-      .getOrderById(
-        originalPartnerReferenceNo
-      );
+  const order = await orderModel.getOrderById(originalPartnerReferenceNo);
 
   if (!order) {
-    throw errorWithStatus(
-      "Order tidak ditemukan",
-      404
-    );
+    throw errorWithStatus("Order tidak ditemukan", 404);
   }
 
-  if (
-    order.dana_payment_id &&
-    order.dana_payment_id !==
-      originalReferenceNo
-  ) {
-    throw errorWithStatus(
-      "Reference DANA tidak sesuai",
-      409
-    );
+  if (order.dana_payment_id && order.dana_payment_id !== originalReferenceNo) {
+    throw errorWithStatus("Reference DANA tidak sesuai", 409);
   }
 
-  if (
-    amount.currency !==
-    "IDR"
-  ) {
-    throw errorWithStatus(
-      "Currency pembayaran DANA tidak sesuai",
-      409
-    );
+  if (amount.currency !== "IDR") {
+    throw errorWithStatus("Currency pembayaran DANA tidak sesuai", 409);
   }
 
-  const callbackAmount =
-    Number(
-      amount.value
-    );
+  const callbackAmount = Number(amount.value);
 
-  const orderAmount =
-    Number(
-      order.total
-    );
+  const orderAmount = Number(order.total);
 
   if (
-    !Number.isFinite(
-      callbackAmount
-    ) ||
-    !Number.isFinite(
-      orderAmount
-    ) ||
-    callbackAmount !==
-      orderAmount
+    !Number.isFinite(callbackAmount) ||
+    !Number.isFinite(orderAmount) ||
+    callbackAmount !== orderAmount
   ) {
     throw errorWithStatus(
       "Nominal pembayaran DANA tidak sesuai dengan order",
-      409
+      409,
     );
   }
 
@@ -1323,69 +783,50 @@ export async function processDanaFinishNotify(
   // SUCCESS
   // ==========================================================
 
-  if (
-    latestTransactionStatus ===
-    "00"
-  ) {
-    return orderModel
-      .processPaymentCallback({
-        id_order:
-          originalPartnerReferenceNo,
+  if (latestTransactionStatus === "00") {
+    const paidAt = finishedTime ? new Date(finishedTime) : new Date();
 
-        payment_status:
-          "APPROVED",
+    if (Number.isNaN(paidAt.getTime())) {
+      throw errorWithStatus("finishedTime DANA tidak valid", 400);
+    }
 
-        order_status:
-          "APPROVED",
+    return orderModel.processPaymentCallback({
+      id_order: originalPartnerReferenceNo,
 
-        dana_payment_id:
-          originalReferenceNo,
+      payment_status: "APPROVED",
 
-        paid_at:
-          finishedTime ||
-          new Date(),
+      order_status: "APPROVED",
 
-        payment_expired_at:
-          order
-            .payment_expired_at ||
-          null,
-      });
+      dana_payment_id: originalReferenceNo,
+
+      paid_at: paidAt,
+
+      payment_expired_at: order.payment_expired_at || null,
+    });
   }
 
   // ==========================================================
   // EXPIRED / CANCELLED
   // ==========================================================
 
-  if (
-    latestTransactionStatus ===
-    "05"
-  ) {
-    return orderModel
-      .processPaymentCallback({
-        id_order:
-          originalPartnerReferenceNo,
+  if (latestTransactionStatus === "05") {
+    return orderModel.processPaymentCallback({
+      id_order: originalPartnerReferenceNo,
 
-        payment_status:
-          "EXPIRED",
+      payment_status: "EXPIRED",
 
-        order_status:
-          "CANCELLED",
+      order_status: "CANCELLED",
 
-        dana_payment_id:
-          originalReferenceNo,
+      dana_payment_id: originalReferenceNo,
 
-        paid_at:
-          null,
+      paid_at: null,
 
-        payment_expired_at:
-          order
-            .payment_expired_at ||
-          null,
-      });
+      payment_expired_at: order.payment_expired_at || null,
+    });
   }
 
   throw errorWithStatus(
     `Status transaksi DANA belum didukung: ${latestTransactionStatus}`,
-    400
+    400,
   );
 }

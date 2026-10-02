@@ -490,7 +490,15 @@ export async function processPaymentCallback({
     let finalPaidAt = order.paid_at;
 
     if (finalPaymentStatus === "APPROVED" && !finalPaidAt) {
-      finalPaidAt = paid_at || new Date();
+      if (paid_at) {
+        finalPaidAt = paid_at instanceof Date ? paid_at : new Date(paid_at);
+
+        if (Number.isNaN(finalPaidAt.getTime())) {
+          throw errorWithStatus("Tanggal pembayaran tidak valid", 500);
+        }
+      } else {
+        finalPaidAt = new Date();
+      }
     }
 
     const finalDanaPaymentId = dana_payment_id || order.dana_payment_id || null;
