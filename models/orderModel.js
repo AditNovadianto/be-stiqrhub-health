@@ -532,6 +532,10 @@ export async function processPaymentCallback({
         throw errorWithStatus("Total order tidak valid", 500);
       }
 
+      const paymentMethod = String(order.payment_method || "")
+        .trim()
+        .toUpperCase();
+
       const [balanceRows] = await connection.query(
         `
             SELECT
@@ -548,7 +552,15 @@ export async function processPaymentCallback({
       );
 
       if (balanceRows.length === 0) {
-        const danaAmount = order.payment_method === "DANA" ? amount : 0;
+        let totalAmount = 0;
+
+        let totalAmountDana = 0;
+
+        if (paymentMethod === "DANA") {
+          totalAmountDana = amount;
+        } else {
+          totalAmount = amount;
+        }
 
         await connection.query(
           `
@@ -559,23 +571,21 @@ export async function processPaymentCallback({
             )
             VALUES (?, ?, ?)
           `,
-          [amount, danaAmount, order.id_provider],
+          [totalAmount, totalAmountDana, order.id_provider],
         );
+
+        balanceUpdated = true;
       } else {
-        if (order.payment_method === "DANA") {
+        if (paymentMethod === "DANA") {
           await connection.query(
             `
               UPDATE balances
               SET
-                total_amount =
-                  total_amount + ?,
-
                 total_amount_dana =
                   total_amount_dana + ?
-
               WHERE id_provider = ?
             `,
-            [amount, amount, order.id_provider],
+            [amount, order.id_provider],
           );
         } else {
           await connection.query(
@@ -584,41 +594,40 @@ export async function processPaymentCallback({
               SET
                 total_amount =
                   total_amount + ?
-
               WHERE id_provider = ?
             `,
             [amount, order.id_provider],
           );
         }
-      }
 
-      balanceUpdated = true;
+        balanceUpdated = true;
+      }
     }
 
     let healthPass = null;
+
     let healthPassCreated = false;
 
     if (finalPaymentStatus === "APPROVED" && finalOrderStatus === "APPROVED") {
       const [existingHealthPassRows] = await connection.query(
         `
-          SELECT
-            id_health_pass,
-            status_health_pass,
-            valid_from,
-            valid_until,
-            booking_at,
-            redeemed_at,
-            redeemed_by,
-            id_order
-          FROM health_passes
-          WHERE id_order = ?
-          LIMIT 1
-        `,
+            SELECT
+              id_health_pass,
+              status_health_pass,
+              valid_from,
+              valid_until,
+              booking_at,
+              redeemed_at,
+              redeemed_by,
+              id_order
+            FROM health_passes
+            WHERE id_order = ?
+            LIMIT 1
+          `,
         [id_order],
       );
 
       if (existingHealthPassRows.length > 0) {
-        // Sudah pernah dibuat
         healthPass = existingHealthPassRows[0];
       } else {
         const id_health_pass = randomUUID();
@@ -661,12 +670,19 @@ export async function processPaymentCallback({
 
         healthPass = {
           id_health_pass,
+
           status_health_pass: "ACTIVE",
+
           valid_from: validFrom,
+
           valid_until: validUntil,
+
           booking_at: order.booking_at,
+
           redeemed_at: null,
+
           redeemed_by: null,
+
           id_order,
         };
       }
@@ -676,14 +692,23 @@ export async function processPaymentCallback({
 
     return {
       id_order,
+
       payment_status: finalPaymentStatus,
+
       order_status: finalOrderStatus,
+
       paid_at: finalPaidAt,
+
       dana_payment_id: finalDanaPaymentId,
+
       payment_expired_at: finalExpiredAt,
+
       payment_updated: true,
+
       balance_updated: balanceUpdated,
+
       health_pass_created: healthPassCreated,
+
       health_pass: healthPass,
     };
   } catch (error) {
