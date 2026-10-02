@@ -503,8 +503,17 @@ export async function processPaymentCallback({
 
     const finalDanaPaymentId = dana_payment_id || order.dana_payment_id || null;
 
-    const finalExpiredAt =
-      payment_expired_at || order.payment_expired_at || null;
+    let finalExpiredAt = payment_expired_at || order.payment_expired_at || null;
+
+    if (finalExpiredAt && !(finalExpiredAt instanceof Date)) {
+      const normalizedExpiredAt = new Date(finalExpiredAt);
+
+      if (Number.isNaN(normalizedExpiredAt.getTime())) {
+        throw errorWithStatus("Tanggal expired pembayaran tidak valid", 500);
+      }
+
+      finalExpiredAt = normalizedExpiredAt;
+    }
 
     await connection.query(
       `
@@ -528,10 +537,12 @@ export async function processPaymentCallback({
       ],
     );
 
-    let balanceUpdated = false;
-
     const firstPaymentApproval =
       previousPaymentStatus !== "APPROVED" && finalPaymentStatus === "APPROVED";
+
+    let balanceUpdated = false;
+
+    let quotaUpdated = false;
 
     if (firstPaymentApproval) {
       const amount = parsePrice(order.total);
@@ -543,6 +554,24 @@ export async function processPaymentCallback({
       const paymentMethod = String(order.payment_method || "")
         .trim()
         .toUpperCase();
+
+      const [quotaResult] = await connection.query(
+        `
+            UPDATE services
+            SET
+              quota_service =
+                quota_service - 1
+            WHERE id_service = ?
+              AND quota_service > 0
+          `,
+        [order.id_service],
+      );
+
+      if (quotaResult.affectedRows === 0) {
+        throw errorWithStatus("Quota service sudah habis", 409);
+      }
+
+      quotaUpdated = true;
 
       const [balanceRows] = await connection.query(
         `
@@ -648,6 +677,13 @@ export async function processPaymentCallback({
 
         const validUntil = addOneCalendarMonth(order.booking_at);
 
+        if (!validUntil || Number.isNaN(new Date(validUntil).getTime())) {
+          throw errorWithStatus(
+            "Tanggal valid until health pass tidak valid",
+            500,
+          );
+        }
+
         await connection.query(
           `
             INSERT INTO health_passes (
@@ -712,6 +748,8 @@ export async function processPaymentCallback({
       payment_expired_at: finalExpiredAt,
 
       payment_updated: true,
+
+      quota_updated: quotaUpdated,
 
       balance_updated: balanceUpdated,
 
