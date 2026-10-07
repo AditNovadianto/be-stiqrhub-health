@@ -27,7 +27,7 @@ router.get("/health-passes/my", verifyToken, getMyHealthPasses);
 // PROVIDER ROUTES
 // ============================================================
 
-// Semua Health Pass untuk provider login.
+// Semua Health Pass milik provider login.
 router.get("/health-passes/provider", verifyToken, getProviderHealthPasses);
 
 // VERIFY
