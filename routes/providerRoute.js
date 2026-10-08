@@ -26,7 +26,7 @@ router.post("/provider/:id/verify-otp", verifyProviderOtp);
 // CRUD
 router.get("/provider/get-all", verifyToken, getAllProviders);
 
-router.get("/provider/:id", verifyToken, getProviderById);
+router.get("/provider/:id", getProviderById);
 
 router.patch("/provider/:id", verifyToken, uploadProvider, updateProvider);
 
