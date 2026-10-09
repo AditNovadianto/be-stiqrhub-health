@@ -97,6 +97,51 @@ export async function getServicesByProvider(id_provider) {
   return rows;
 }
 
+// GET BY PROVIDER CATEGORY
+export async function getServicesByProviderCategory(id_provider_category) {
+  const [rows] = await db.query(
+    `
+        SELECT
+          s.id_service,
+          s.name_service,
+          s.price_service,
+          s.image_service,
+          s.description_service,
+          s.status_service,
+          s.maps_service,
+          s.quota_service,
+          s.id_provider,
+
+          p.name_provider,
+          p.status_provider,
+          p.id_provider_category,
+
+          pc.name_provider_category,
+          pc.description_provider_category,
+          pc.status_provider_category
+
+        FROM services s
+
+        INNER JOIN providers p
+          ON s.id_provider = p.id_provider
+
+        INNER JOIN provider_categories pc
+          ON p.id_provider_category =
+             pc.id_provider_category
+
+        WHERE p.id_provider_category = ?
+          AND p.status_provider = 'APPROVED'
+          AND s.status_service = 'ACTIVE'
+          AND pc.status_provider_category = 'ACTIVE'
+
+        ORDER BY s.id_service DESC
+      `,
+    [id_provider_category],
+  );
+
+  return rows;
+}
+
 // UPDATE
 export async function updateService(id_service, id_provider, data) {
   const service = await getServiceById(id_service);

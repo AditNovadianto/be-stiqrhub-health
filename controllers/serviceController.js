@@ -277,6 +277,30 @@ export const getServicesByProvider = async (req, res) => {
   }
 };
 
+// READ BY PROVIDER CATEGORY
+export const getServicesByProviderCategory = async (req, res) => {
+  const { id_provider_category } = req.params;
+
+  if (!isValidId(id_provider_category)) {
+    return res.status(400).json({
+      success: false,
+      message: "ID provider category tidak valid",
+    });
+  }
+
+  try {
+    const services =
+      await serviceModel.getServicesByProviderCategory(id_provider_category);
+
+    return res.status(200).json({
+      success: true,
+      data: services,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+};
+
 // UPDATE
 export const updateService = async (req, res) => {
   const { id } = req.params;
