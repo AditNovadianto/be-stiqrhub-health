@@ -60,25 +60,28 @@ const getCustomerId = (req) => {
 };
 
 // GENERATE HEALTH PASS QR TOKEN
-const generateQrToken = (healthPass) => {
+
+export const generateQrToken = (healthPass) => {
+  if (
+    !healthPass?.id_health_pass ||
+    !healthPass?.id_order ||
+    !healthPass?.id_service ||
+    !healthPass?.id_provider
+  ) {
+    throw errorWithStatus("Data Health Pass untuk QR tidak lengkap", 500);
+  }
+
   return jwt.sign(
     {
       type: "HEALTH_PASS",
-
       id_health_pass: healthPass.id_health_pass,
-
       id_order: healthPass.id_order,
-
       id_service: healthPass.id_service,
-
       id_provider: healthPass.id_provider,
     },
-
     getQrSecret(),
-
     {
       algorithm: "HS256",
-
       expiresIn: process.env.HEALTH_PASS_QR_EXPIRES_IN || "30d",
     },
   );

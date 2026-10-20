@@ -9,6 +9,12 @@ import { danaPaymentConfig } from "../config/danaPayment.js";
 
 import { verifySnapSignature } from "../utils/danaSnapSignature.js";
 
+import * as orderModel from "../../models/orderModel.js";
+
+import { generateQrToken } from "../../controllers/healthPassesController.js";
+
+import { sendHealthPassEmail } from "../../utils/mailer.js";
+
 // Uncomment this to debug the public key fingerprint if needed
 // import crypto from "crypto";
 
@@ -124,34 +130,23 @@ export async function createPayment(req, res) {
 
 export async function finishNotify(req, res) {
   const timestamp = req.headers["x-timestamp"];
-
   const signature = req.headers["x-signature"];
 
   logSection("[DANA FINISH NOTIFY RECEIVED]", {
     method: req.method,
-
     path: req.originalUrl,
-
     headers: {
       "x-timestamp": timestamp || null,
-
       "x-signature": signature ? "***MASKED***" : null,
-
       "x-partner-id": req.headers["x-partner-id"] || null,
-
       "x-external-id": req.headers["x-external-id"] || null,
     },
-
-    rawBody: req.rawBody || null,
-
-    parsedBody: req.body,
   });
 
   try {
     if (!timestamp || !signature) {
       return res.status(401).json({
         responseCode: "4015600",
-
         responseMessage: "Unauthorized",
       });
     }
@@ -166,23 +161,12 @@ export async function finishNotify(req, res) {
 
     const signatureValid = verifySnapSignature({
       method: "POST",
-
       path: "/v1.0/debit/notify",
-
       rawBody: req.rawBody,
-
       timestamp,
-
       signature,
-
       publicKey: danaPaymentConfig.publicKey,
     });
-
-    // Uncomment this to debug the public key fingerprint if needed
-    // console.log(
-    //   "[DANA PUBLIC KEY FINGERPRINT]",
-    //   getPublicKeyFingerprint(danaPaymentConfig.publicKey),
-    // );
 
     logSection("[DANA FINISH NOTIFY SIGNATURE CHECK]", {
       valid: signatureValid,
@@ -194,38 +178,137 @@ export async function finishNotify(req, res) {
     if (!signatureValid) {
       return res.status(401).json({
         responseCode: "4015600",
-
         responseMessage: "Unauthorized",
       });
     }
 
+    // Service existing sudah memvalidasi merchant,
+    // reference number, currency, dan nominal DANA.
+    //
+    // orderModel juga melakukan COMMIT terlebih dahulu
+    // sebelum result dikembalikan.
     const result = await processDanaFinishNotify(req.body);
 
     logSection("[DANA FINISH NOTIFY PROCESSED]", {
       id_order: result.id_order,
-
       payment_status: result.payment_status,
-
       order_status: result.order_status,
-
+      quota_updated: result.quota_updated,
       balance_updated: result.balance_updated,
-
       health_pass_created: result.health_pass_created,
+      first_payment_approval: result.first_payment_approval,
+      notification_required: result.notification_required,
     });
+
+    // Email hanya dikirim pada approval pertama,
+    // sehingga callback berulang tidak mengirim ulang.
+    const shouldSendEmail =
+      result.payment_status === "APPROVED" &&
+      result.order_status === "APPROVED" &&
+      result.first_payment_approval === true &&
+      result.notification_required === true;
+
+    if (shouldSendEmail) {
+      try {
+        console.log("[PAYMENT EMAIL START]", {
+          id_order: result.id_order,
+        });
+
+        const order = await orderModel.getOrderById(result.id_order);
+
+        if (!order) {
+          throw new Error("Order tidak ditemukan setelah pembayaran");
+        }
+
+        if (
+          typeof order.email_customer !== "string" ||
+          !order.email_customer.trim()
+        ) {
+          throw new Error("Email customer tidak tersedia");
+        }
+
+        const healthPass = result.health_pass;
+
+        if (!healthPass?.id_health_pass) {
+          throw new Error("Health Pass tidak tersedia setelah pembayaran");
+        }
+
+        // health_pass pada orderModel hanya memiliki
+        // data tabel health_passes.
+        //
+        // id_service dan id_provider diambil dari order.
+        // Ini sesuai payload generator QR existing.
+        const qrToken = generateQrToken({
+          ...healthPass,
+          id_order: result.id_order,
+          id_service: order.id_service,
+          id_provider: order.id_provider,
+        });
+
+        const mailInfo = await sendHealthPassEmail({
+          email: order.email_customer.trim(),
+          name: order.name_customer || "Pelanggan",
+          orderId: order.id_order,
+          serviceName: order.name_service,
+          providerName: order.name_provider,
+          bookingAt: order.booking_at,
+          total: order.total,
+          healthPassId: healthPass.id_health_pass,
+          validUntil: healthPass.valid_until,
+          qrToken,
+        });
+
+        console.log("[PAYMENT EMAIL SMTP RESULT]", {
+          id_order: result.id_order,
+          messageId: mailInfo.messageId || null,
+          accepted: mailInfo.accepted || [],
+          rejected: mailInfo.rejected || [],
+        });
+
+        const recipientAccepted =
+          Array.isArray(mailInfo.accepted) &&
+          mailInfo.accepted.some(
+            (email) =>
+              email.toLowerCase() === order.email_customer.trim().toLowerCase(),
+          );
+
+        if (!recipientAccepted) {
+          throw new Error("SMTP tidak menerima email customer");
+        }
+
+        console.log("[PAYMENT EMAIL SUCCESS]", {
+          id_order: result.id_order,
+        });
+      } catch (emailError) {
+        // Jangan menggagalkan pembayaran yang sudah COMMIT.
+        console.error("[PAYMENT EMAIL ERROR]", {
+          id_order: result.id_order,
+          code: emailError.code || null,
+          message: emailError.message,
+          stack: emailError.stack,
+        });
+      }
+    } else {
+      console.log("[PAYMENT EMAIL SKIPPED]", {
+        id_order: result.id_order,
+        payment_status: result.payment_status,
+        first_payment_approval: result.first_payment_approval,
+        notification_required: result.notification_required,
+      });
+    }
 
     return res.status(200).json({
       responseCode: "2005600",
-
       responseMessage: "Successful",
     });
   } catch (error) {
     logSection("[DANA FINISH NOTIFY ERROR]", {
       message: error.message,
+      code: error.code || null,
     });
 
     return res.status(500).json({
       responseCode: "5005601",
-
       responseMessage: "Internal Server Error",
     });
   }

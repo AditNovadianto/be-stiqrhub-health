@@ -111,88 +111,214 @@ export async function createOrder(
   id_customer,
   id_service,
 ) {
-  const customer = await getCustomerById(id_customer);
+  const connection = await db.getConnection();
 
-  if (!customer) {
-    throw errorWithStatus("Customer tidak ditemukan", 404);
-  }
+  try {
+    await connection.beginTransaction();
 
-  const service = await getServiceForOrder(id_service);
+    const [customerRows] = await connection.query(
+      `
+          SELECT
+            id_customer,
+            name_customer,
+            email_customer,
+            phone_number_customer,
+            id_platform
+          FROM customers
+          WHERE id_customer = ?
+          LIMIT 1
+          FOR UPDATE
+        `,
+      [id_customer],
+    );
 
-  if (!service) {
-    throw errorWithStatus("Service tidak ditemukan", 404);
-  }
+    if (customerRows.length === 0) {
+      throw errorWithStatus("Customer tidak ditemukan", 404);
+    }
 
-  if (service.status_provider !== "APPROVED") {
-    throw errorWithStatus("Provider belum disetujui", 403);
-  }
+    const [serviceRows] = await connection.query(
+      `
+          SELECT
+            s.id_service,
+            s.name_service,
+            s.price_service,
+            s.status_service,
+            s.quota_service,
+            s.id_provider,
 
-  if (service.status_service !== "ACTIVE") {
-    throw errorWithStatus("Service sedang tidak aktif", 400);
-  }
+            p.name_provider,
+            p.status_provider
 
-  const price = parsePrice(service.price_service);
+          FROM services s
 
-  if (price === null) {
-    throw errorWithStatus("Harga service tidak valid", 500);
-  }
+          INNER JOIN providers p
+            ON s.id_provider = p.id_provider
 
-  const quota = parseQuota(service.quota_service);
+          WHERE s.id_service = ?
 
-  if (quota === null) {
-    throw errorWithStatus("Kuota service tidak valid", 500);
-  }
+          LIMIT 1
 
-  if (quota <= 0) {
-    throw errorWithStatus("Kuota service sudah habis", 409);
-  }
+          FOR UPDATE
+        `,
+      [id_service],
+    );
 
-  const id_order = randomUUID();
+    if (serviceRows.length === 0) {
+      throw errorWithStatus("Service tidak ditemukan", 404);
+    }
 
-  const sub_total = String(price);
-  const total = String(price);
+    const service = serviceRows[0];
 
-  const [result] = await db.query(
-    `
-      INSERT INTO orders (
+    if (service.status_provider !== "APPROVED") {
+      throw errorWithStatus("Provider belum disetujui", 403);
+    }
+
+    if (service.status_service !== "ACTIVE") {
+      throw errorWithStatus("Service sedang tidak aktif", 400);
+    }
+
+    const price = parsePrice(service.price_service);
+
+    if (price === null) {
+      throw errorWithStatus("Harga service tidak valid", 500);
+    }
+
+    const quota = parseQuota(service.quota_service);
+
+    if (quota === null) {
+      throw errorWithStatus("Kuota service tidak valid", 500);
+    }
+
+    if (quota <= 0) {
+      throw errorWithStatus("Kuota service sudah habis", 409);
+    }
+
+    const [existingHealthPassRows] = await connection.query(
+      `
+          SELECT
+            hp.id_health_pass,
+            hp.status_health_pass,
+            hp.booking_at,
+            hp.valid_from,
+            hp.valid_until,
+
+            o.id_order,
+            o.id_customer,
+            o.id_service
+
+          FROM health_passes hp
+
+          INNER JOIN orders o
+            ON hp.id_order = o.id_order
+
+          WHERE o.id_customer = ?
+            AND o.id_service = ?
+            AND hp.booking_at = ?
+            AND hp.status_health_pass = 'ACTIVE'
+
+          LIMIT 1
+        `,
+      [id_customer, id_service, booking_at],
+    );
+
+    if (existingHealthPassRows.length > 0) {
+      throw errorWithStatus(
+        "Anda sudah memiliki Health Pass aktif untuk layanan ini pada tanggal dan waktu tersebut",
+        409,
+      );
+    }
+
+    const [pendingOrderRows] = await connection.query(
+      `
+          SELECT
+            id_order,
+            payment_status,
+            order_status,
+            booking_at,
+            id_customer,
+            id_service
+
+          FROM orders
+
+          WHERE id_customer = ?
+            AND id_service = ?
+            AND booking_at = ?
+            AND payment_status = 'PENDING'
+            AND order_status = 'PENDING'
+
+          LIMIT 1
+        `,
+      [id_customer, id_service, booking_at],
+    );
+
+    if (pendingOrderRows.length > 0) {
+      throw errorWithStatus(
+        "Anda masih memiliki pembayaran yang belum selesai untuk layanan dan jadwal tersebut",
+        409,
+      );
+    }
+
+    const id_order = randomUUID();
+
+    const sub_total = String(price);
+
+    const total = String(price);
+
+    const [result] = await connection.query(
+      `
+          INSERT INTO orders (
+            id_order,
+            sub_total,
+            total,
+            payment_method,
+            payment_status,
+            order_status,
+            paid_at,
+            booking_at,
+            dana_payment_id,
+            payment_expired_at,
+            payment_updated_at,
+            id_customer,
+            id_service
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      [
         id_order,
         sub_total,
         total,
         payment_method,
-        payment_status,
-        order_status,
-        paid_at,
+
+        "PENDING",
+        "PENDING",
+
+        null,
+
         booking_at,
-        dana_payment_id,
-        payment_expired_at,
-        payment_updated_at,
+
+        null,
+        null,
+        null,
+
         id_customer,
-        id_service
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      id_order,
-      sub_total,
-      total,
-      payment_method,
-      "PENDING",
-      "PENDING",
-      null,
-      booking_at,
-      null,
-      null,
-      null,
-      id_customer,
-      id_service,
-    ],
-  );
+        id_service,
+      ],
+    );
 
-  if (result.affectedRows === 0) {
-    throw errorWithStatus("Order gagal dibuat", 500);
+    if (result.affectedRows === 0) {
+      throw errorWithStatus("Order gagal dibuat", 500);
+    }
+
+    await connection.commit();
+
+    return id_order;
+  } catch (error) {
+    await connection.rollback();
+
+    throw error;
+  } finally {
+    connection.release();
   }
-
-  return id_order;
 }
 
 // GET ALL ORDERS
@@ -736,26 +862,27 @@ export async function processPaymentCallback({
 
     return {
       id_order,
-
       payment_status: finalPaymentStatus,
-
       order_status: finalOrderStatus,
-
       paid_at: finalPaidAt,
-
       dana_payment_id: finalDanaPaymentId,
-
       payment_expired_at: finalExpiredAt,
 
       payment_updated: true,
-
       quota_updated: quotaUpdated,
-
       balance_updated: balanceUpdated,
 
       health_pass_created: healthPassCreated,
-
       health_pass: healthPass,
+
+      // Digunakan callback DANA untuk memicu email sekali.
+      first_payment_approval: firstPaymentApproval,
+
+      notification_required:
+        firstPaymentApproval &&
+        finalPaymentStatus === "APPROVED" &&
+        finalOrderStatus === "APPROVED" &&
+        healthPass !== null,
     };
   } catch (error) {
     await connection.rollback();

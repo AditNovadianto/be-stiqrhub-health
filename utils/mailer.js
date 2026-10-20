@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import QRCode from "qrcode";
 
 const transporter = nodemailer.createTransport({
   host: "mekongga.iixcp.rumahweb.net",
@@ -249,6 +250,190 @@ export const sendForgotPasswordEmail = async (email, name, resetUrl) => {
       resetUrl,
     ].join("\n"),
     html,
+  });
+};
+
+// =====================================================
+// SEND PAYMENT SUCCESS + HEALTH PASS EMAIL
+// =====================================================
+
+export const sendHealthPassEmail = async ({
+  email,
+  name,
+  orderId,
+  serviceName,
+  providerName,
+  bookingAt,
+  total,
+  healthPassId,
+  validUntil,
+  qrToken,
+}) => {
+  if (!email || !qrToken || !healthPassId) {
+    throw new Error("Email, Health Pass ID, dan QR token wajib tersedia");
+  }
+
+  const rupiah = new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  });
+
+  const dateFormat = (value) => {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "-";
+
+    return new Intl.DateTimeFormat("id-ID", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: "Asia/Jakarta",
+    }).format(date);
+  };
+
+  // Gunakan QR token resmi dari backend.
+  const qrBuffer = await QRCode.toBuffer(qrToken, {
+    type: "png",
+    width: 320,
+    margin: 2,
+    errorCorrectionLevel: "M",
+    color: {
+      dark: "#032155",
+      light: "#FFFFFF",
+    },
+  });
+
+  const safeName = escapeHtml(name || "Pelanggan");
+  const safeService = escapeHtml(serviceName || "-");
+  const safeProvider = escapeHtml(providerName || "-");
+  const safeOrderId = escapeHtml(orderId);
+  const safeHealthPassId = escapeHtml(healthPassId);
+
+  const html = emailLayout(
+    "Pembayaran Berhasil",
+    `
+      <p>Hi <strong>${safeName}</strong>,</p>
+
+      <p>
+        Terima kasih! Pembayaran kamu di
+        <strong>STIQR Health</strong>
+        telah berhasil.
+      </p>
+
+      <div style="
+        padding: 20px;
+        background: #f0f9ff;
+        border-radius: 12px;
+        margin: 24px 0;
+      ">
+        <p style="margin: 0 0 8px;">
+          <strong>Layanan:</strong> ${safeService}
+        </p>
+
+        <p style="margin: 0 0 8px;">
+          <strong>Klinik:</strong> ${safeProvider}
+        </p>
+
+        <p style="margin: 0 0 8px;">
+          <strong>Rencana kunjungan:</strong>
+          ${escapeHtml(dateFormat(bookingAt))}
+        </p>
+
+        <p style="margin: 0 0 8px;">
+          <strong>Order ID:</strong> ${safeOrderId}
+        </p>
+
+        <p style="margin: 0;">
+          <strong>Total pembayaran:</strong>
+          ${rupiah.format(Number(total) || 0)}
+        </p>
+      </div>
+
+      <div style="
+        text-align: center;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 24px 12px;
+      ">
+        <h2 style="
+          margin: 0 0 12px;
+          color: #032155;
+          font-size: 20px;
+        ">
+          Health Pass Kamu
+        </h2>
+
+        <p style="color: #6b7280;">
+          Tunjukkan QR Code berikut kepada
+          petugas klinik.
+        </p>
+
+        <img
+          src="cid:stiqr-health-pass-qr"
+          alt="QR Code Health Pass"
+          width="240"
+          height="240"
+          style="display: block; margin: 16px auto;"
+        />
+
+        <p style="
+          font-size: 14px;
+          color: #032155;
+          font-weight: bold;
+          overflow-wrap: anywhere;
+        ">
+          ${safeHealthPassId}
+        </p>
+
+        <p style="color: #6b7280; font-size: 13px;">
+          Berlaku sampai:
+          ${escapeHtml(dateFormat(validUntil))}
+        </p>
+      </div>
+
+      <p style="margin-top: 24px;">
+        Kamu juga dapat mengakses Health Pass
+        melalui menu <strong>Health Pass</strong>
+        di STIQR Health Mini Program.
+      </p>
+
+      <p style="color: #6b7280; font-size: 13px;">
+        QR Code bersifat pribadi.
+        Jangan membagikannya kepada pihak lain.
+      </p>
+    `,
+  );
+
+  return transporter.sendMail({
+    from: `"STIQR Hub Health" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: "Pembayaran Berhasil - Health Pass STIQR Health",
+    text: [
+      `Hi ${name || "Pelanggan"},`,
+      "",
+      "Pembayaran STIQR Health kamu berhasil.",
+      `Layanan: ${serviceName || "-"}`,
+      `Klinik: ${providerName || "-"}`,
+      `Order ID: ${orderId}`,
+      `Health Pass ID: ${healthPassId}`,
+      `Total: ${rupiah.format(Number(total) || 0)}`,
+      `Rencana kunjungan: ${dateFormat(bookingAt)}`,
+      `Berlaku sampai: ${dateFormat(validUntil)}`,
+      "",
+      "QR Code Health Pass terlampir pada email ini.",
+      "Tunjukkan QR Code kepada petugas klinik.",
+    ].join("\n"),
+    html,
+    attachments: [
+      {
+        filename: "STIQR-Health-Pass.png",
+        content: qrBuffer,
+        contentType: "image/png",
+        cid: "stiqr-health-pass-qr",
+      },
+    ],
   });
 };
 
