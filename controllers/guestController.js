@@ -14,12 +14,20 @@ const handleError = (res, error) => {
   console.error("[GUEST ERROR]", {
     message: error.message,
     statusCode: error.statusCode || 500,
+    code: error.code || null,
   });
 
   if (error.code === "ER_NO_REFERENCED_ROW_2") {
     return res.status(400).json({
       success: false,
       message: "Customer tidak valid",
+    });
+  }
+
+  if (error.statusCode === 409 && error.existingGuest) {
+    return res.status(409).json({
+      success: false,
+      message: error.message,
     });
   }
 
@@ -40,7 +48,6 @@ export async function createGuest(req, res) {
     const { name_guest, email_guest, gender_guest, phone_number_guest } =
       req.body || {};
 
-    // VALIDATE NAME
     if (typeof name_guest !== "string" || !name_guest.trim()) {
       throw errorWithStatus("Nama guest wajib diisi", 400);
     }
@@ -51,7 +58,6 @@ export async function createGuest(req, res) {
       throw errorWithStatus("Nama guest maksimal 255 karakter", 400);
     }
 
-    // VALIDATE EMAIL
     if (typeof email_guest !== "string" || !email_guest.trim()) {
       throw errorWithStatus("Email guest wajib diisi", 400);
     }
@@ -64,7 +70,6 @@ export async function createGuest(req, res) {
       throw errorWithStatus("Format email guest tidak valid", 400);
     }
 
-    // VALIDATE GENDER
     if (typeof gender_guest !== "string" || !gender_guest.trim()) {
       throw errorWithStatus("Gender guest wajib diisi", 400);
     }
@@ -75,7 +80,6 @@ export async function createGuest(req, res) {
       throw errorWithStatus("Gender guest harus MALE atau FEMALE", 400);
     }
 
-    // VALIDATE PHONE
     let normalizedPhone = null;
 
     if (
@@ -98,7 +102,6 @@ export async function createGuest(req, res) {
       }
     }
 
-    // CREATE GUEST
     const guest = await guestModel.createGuest({
       name_guest: normalizedName,
       email_guest: normalizedEmail,
@@ -110,6 +113,7 @@ export async function createGuest(req, res) {
     console.log("[GUEST CREATED]", {
       id_guest: guest.id_guest,
       id_customer: guest.id_customer,
+      email_guest: guest.email_guest,
     });
 
     return res.status(201).json({
