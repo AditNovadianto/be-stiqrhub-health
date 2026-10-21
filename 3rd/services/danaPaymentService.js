@@ -522,7 +522,28 @@ export async function createDanaPayment({ idOrder, idCustomer, deviceId }) {
   // VALIDATE CUSTOMER
   // ==========================================================
 
-  if (Number(order.id_customer) !== Number(idCustomer)) {
+  // Validate ownership untuk customer atau guest
+  let orderOwnerId = order.id_customer;
+
+  if (order.id_guest != null) {
+    const [guestRows] = await db.query(
+      `
+      SELECT id_customer
+      FROM guests
+      WHERE id_guest = ?
+      LIMIT 1
+    `,
+      [order.id_guest],
+    );
+
+    if (guestRows.length === 0) {
+      throw errorWithStatus("Guest tidak ditemukan", 404);
+    }
+
+    orderOwnerId = guestRows[0].id_customer;
+  }
+
+  if (orderOwnerId == null || Number(orderOwnerId) !== Number(idCustomer)) {
     throw errorWithStatus("Order bukan milik customer ini", 403);
   }
 

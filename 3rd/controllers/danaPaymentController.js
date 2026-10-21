@@ -182,11 +182,6 @@ export async function finishNotify(req, res) {
       });
     }
 
-    // Service existing sudah memvalidasi merchant,
-    // reference number, currency, dan nominal DANA.
-    //
-    // orderModel juga melakukan COMMIT terlebih dahulu
-    // sebelum result dikembalikan.
     const result = await processDanaFinishNotify(req.body);
 
     logSection("[DANA FINISH NOTIFY PROCESSED]", {
@@ -200,8 +195,6 @@ export async function finishNotify(req, res) {
       notification_required: result.notification_required,
     });
 
-    // Email hanya dikirim pada approval pertama,
-    // sehingga callback berulang tidak mengirim ulang.
     const shouldSendEmail =
       result.payment_status === "APPROVED" &&
       result.order_status === "APPROVED" &&
@@ -220,12 +213,30 @@ export async function finishNotify(req, res) {
           throw new Error("Order tidak ditemukan setelah pembayaran");
         }
 
-        if (
-          typeof order.email_customer !== "string" ||
-          !order.email_customer.trim()
-        ) {
-          throw new Error("Email customer tidak tersedia");
+        // CUSTOMER -> email_customer
+        // GUEST    -> email_guest
+        // Field recipient_* sudah disediakan orderModel.
+
+        const recipientEmail =
+          typeof order.recipient_email === "string"
+            ? order.recipient_email.trim()
+            : "";
+
+        const recipientName =
+          typeof order.recipient_name === "string" &&
+          order.recipient_name.trim()
+            ? order.recipient_name.trim()
+            : "Pelanggan";
+
+        if (!recipientEmail) {
+          throw new Error("Email penerima Health Pass tidak tersedia");
         }
+
+        console.log("[PAYMENT EMAIL RECIPIENT]", {
+          id_order: order.id_order,
+          recipient_type: order.recipient_type,
+          recipient_email: recipientEmail,
+        });
 
         const healthPass = result.health_pass;
 
@@ -233,11 +244,6 @@ export async function finishNotify(req, res) {
           throw new Error("Health Pass tidak tersedia setelah pembayaran");
         }
 
-        // health_pass pada orderModel hanya memiliki
-        // data tabel health_passes.
-        //
-        // id_service dan id_provider diambil dari order.
-        // Ini sesuai payload generator QR existing.
         const qrToken = generateQrToken({
           ...healthPass,
           id_order: result.id_order,
@@ -246,8 +252,8 @@ export async function finishNotify(req, res) {
         });
 
         const mailInfo = await sendHealthPassEmail({
-          email: order.email_customer.trim(),
-          name: order.name_customer || "Pelanggan",
+          email: recipientEmail,
+          name: recipientName,
           orderId: order.id_order,
           serviceName: order.name_service,
           providerName: order.name_provider,
@@ -269,18 +275,23 @@ export async function finishNotify(req, res) {
           Array.isArray(mailInfo.accepted) &&
           mailInfo.accepted.some(
             (email) =>
-              email.toLowerCase() === order.email_customer.trim().toLowerCase(),
+              typeof email === "string" &&
+              email.toLowerCase() === recipientEmail.toLowerCase(),
           );
 
         if (!recipientAccepted) {
-          throw new Error("SMTP tidak menerima email customer");
+          throw new Error("SMTP tidak menerima email penerima Health Pass");
         }
 
         console.log("[PAYMENT EMAIL SUCCESS]", {
           id_order: result.id_order,
+          recipient_type: order.recipient_type,
+          recipient_email: recipientEmail,
         });
       } catch (emailError) {
-        // Jangan menggagalkan pembayaran yang sudah COMMIT.
+        // Pembayaran DANA sudah berhasil dan COMMIT.
+        // Kegagalan email tidak membatalkan pembayaran.
+
         console.error("[PAYMENT EMAIL ERROR]", {
           id_order: result.id_order,
           code: emailError.code || null,

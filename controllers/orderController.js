@@ -73,44 +73,93 @@ const handleError = (res, error) => {
 
 // CREATE ORDER
 export const createOrder = async (req, res) => {
-  const { payment_method, booking_at, id_customer, id_service } = req.body;
-
-  if (typeof payment_method !== "string" || !payment_method.trim()) {
-    return res.status(400).json({
-      success: false,
-      message: "Payment method wajib diisi",
-    });
-  }
-
-  if (!isValidDate(booking_at)) {
-    return res.status(400).json({
-      success: false,
-      message: "Booking date tidak valid",
-    });
-  }
-
-  const bookingDate = new Date(booking_at);
-
-  if (bookingDate <= new Date()) {
-    return res.status(400).json({
-      success: false,
-      message: "Booking date harus setelah waktu sekarang",
-    });
-  }
-
-  if (!isValidIntegerId(id_customer) || !isValidIntegerId(id_service)) {
-    return res.status(400).json({
-      success: false,
-      message: "ID customer atau ID service tidak valid",
-    });
-  }
-
   try {
+    const {
+      payment_method,
+      booking_at,
+      id_customer = null,
+      id_guest = null,
+      id_service,
+    } = req.body || {};
+
+    const idCustomerLogin = req.user?.id_customer;
+
+    if (!isValidIntegerId(idCustomerLogin)) {
+      return res.status(401).json({
+        success: false,
+        message: "Customer tidak terautentikasi",
+      });
+    }
+
+    if (typeof payment_method !== "string" || !payment_method.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment method wajib diisi",
+      });
+    }
+
+    if (!isValidDate(booking_at)) {
+      return res.status(400).json({
+        success: false,
+        message: "Booking date tidak valid",
+      });
+    }
+
+    if (new Date(booking_at) <= new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Booking date harus setelah waktu sekarang",
+      });
+    }
+
+    if (!isValidIntegerId(id_service)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID service tidak valid",
+      });
+    }
+
+    const hasCustomer = id_customer !== null && id_customer !== undefined;
+
+    const hasGuest = id_guest !== null && id_guest !== undefined;
+
+    if (hasCustomer === hasGuest) {
+      return res.status(400).json({
+        success: false,
+        message: "Pilih tepat satu penerima: customer atau guest",
+      });
+    }
+
+    if (hasCustomer) {
+      if (!isValidIntegerId(id_customer)) {
+        return res.status(400).json({
+          success: false,
+          message: "ID customer tidak valid",
+        });
+      }
+
+      if (Number(id_customer) !== Number(idCustomerLogin)) {
+        return res.status(403).json({
+          success: false,
+          message: "ID customer tidak sesuai akun login",
+        });
+      }
+    }
+
+    if (hasGuest && !isValidIntegerId(id_guest)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID guest tidak valid",
+      });
+    }
+
     const id_order = await orderModel.createOrder(
       payment_method.trim().toUpperCase(),
       booking_at,
-      id_customer,
-      id_service,
+      hasCustomer ? Number(id_customer) : null,
+      Number(id_service),
+      hasGuest ? Number(id_guest) : null,
+      Number(idCustomerLogin),
     );
 
     const order = await orderModel.getOrderById(id_order);

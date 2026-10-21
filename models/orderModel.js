@@ -54,6 +54,9 @@ const addOneCalendarMonth = (dateValue) => {
   return result;
 };
 
+const isPositiveId = (value) =>
+  /^[1-9]\d*$/.test(String(value)) && Number.isSafeInteger(Number(value));
+
 // GET CUSTOMER BY ID
 export async function getCustomerById(id_customer) {
   const [rows] = await db.query(
@@ -110,57 +113,117 @@ export async function createOrder(
   booking_at,
   id_customer,
   id_service,
+  id_guest = null,
+  id_customer_buyer = null,
 ) {
+  const hasCustomer = id_customer !== null && id_customer !== undefined;
+
+  const hasGuest = id_guest !== null && id_guest !== undefined;
+
+  if (hasCustomer === hasGuest) {
+    throw errorWithStatus(
+      "Pilih tepat satu penerima: customer atau guest",
+      400,
+    );
+  }
+
+  if (hasCustomer && !isPositiveId(id_customer)) {
+    throw errorWithStatus("ID customer tidak valid", 400);
+  }
+
+  if (hasGuest && !isPositiveId(id_guest)) {
+    throw errorWithStatus("ID guest tidak valid", 400);
+  }
+
+  if (!isPositiveId(id_customer_buyer)) {
+    throw errorWithStatus("Customer pembeli tidak valid", 401);
+  }
+
+  if (hasCustomer && Number(id_customer) !== Number(id_customer_buyer)) {
+    throw errorWithStatus("ID customer tidak sesuai akun login", 403);
+  }
+
+  if (!isPositiveId(id_service)) {
+    throw errorWithStatus("ID service tidak valid", 400);
+  }
+
+  if (typeof payment_method !== "string" || !payment_method.trim()) {
+    throw errorWithStatus("Payment method wajib diisi", 400);
+  }
+
+  const normalizedPaymentMethod = payment_method.trim().toUpperCase();
+
+  const bookingDate = new Date(booking_at);
+
+  if (Number.isNaN(bookingDate.getTime()) || bookingDate <= new Date()) {
+    throw errorWithStatus("Booking date harus valid dan di masa depan", 400);
+  }
+
   const connection = await db.getConnection();
 
   try {
     await connection.beginTransaction();
 
-    const [customerRows] = await connection.query(
-      `
-          SELECT
-            id_customer,
-            name_customer,
-            email_customer,
-            phone_number_customer,
-            id_platform
+    if (hasCustomer) {
+      const [customerRows] = await connection.query(
+        `
+          SELECT id_customer
           FROM customers
           WHERE id_customer = ?
           LIMIT 1
           FOR UPDATE
         `,
-      [id_customer],
-    );
+        [Number(id_customer)],
+      );
 
-    if (customerRows.length === 0) {
-      throw errorWithStatus("Customer tidak ditemukan", 404);
+      if (customerRows.length === 0) {
+        throw errorWithStatus("Customer tidak ditemukan", 404);
+      }
+    } else {
+      const [guestRows] = await connection.query(
+        `
+          SELECT
+            id_guest,
+            id_customer
+          FROM guests
+          WHERE id_guest = ?
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [Number(id_guest)],
+      );
+
+      if (guestRows.length === 0) {
+        throw errorWithStatus("Guest tidak ditemukan", 404);
+      }
+
+      if (
+        guestRows[0].id_customer == null ||
+        Number(guestRows[0].id_customer) !== Number(id_customer_buyer)
+      ) {
+        throw errorWithStatus("Guest bukan milik customer ini", 403);
+      }
     }
 
     const [serviceRows] = await connection.query(
       `
-          SELECT
-            s.id_service,
-            s.name_service,
-            s.price_service,
-            s.status_service,
-            s.quota_service,
-            s.id_provider,
-
-            p.name_provider,
-            p.status_provider
-
-          FROM services s
-
-          INNER JOIN providers p
-            ON s.id_provider = p.id_provider
-
-          WHERE s.id_service = ?
-
-          LIMIT 1
-
-          FOR UPDATE
-        `,
-      [id_service],
+        SELECT
+          s.id_service,
+          s.name_service,
+          s.price_service,
+          s.status_service,
+          s.quota_service,
+          s.id_provider,
+          p.name_provider,
+          p.status_provider
+        FROM services s
+        INNER JOIN providers p
+          ON s.id_provider = p.id_provider
+        WHERE s.id_service = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [Number(id_service)],
     );
 
     if (serviceRows.length === 0) {
@@ -193,119 +256,96 @@ export async function createOrder(
       throw errorWithStatus("Kuota service sudah habis", 409);
     }
 
+    const recipientWhere = hasCustomer ? "o.id_customer = ?" : "o.id_guest = ?";
+
+    const recipientId = hasCustomer ? Number(id_customer) : Number(id_guest);
+
     const [existingHealthPassRows] = await connection.query(
       `
-          SELECT
-            hp.id_health_pass,
-            hp.status_health_pass,
-            hp.booking_at,
-            hp.valid_from,
-            hp.valid_until,
-
-            o.id_order,
-            o.id_customer,
-            o.id_service
-
+          SELECT hp.id_health_pass
           FROM health_passes hp
-
           INNER JOIN orders o
             ON hp.id_order = o.id_order
-
-          WHERE o.id_customer = ?
+          WHERE ${recipientWhere}
             AND o.id_service = ?
             AND hp.booking_at = ?
             AND hp.status_health_pass = 'ACTIVE'
-
           LIMIT 1
         `,
-      [id_customer, id_service, booking_at],
+      [recipientId, Number(id_service), booking_at],
     );
 
     if (existingHealthPassRows.length > 0) {
       throw errorWithStatus(
-        "Anda sudah memiliki Health Pass aktif untuk layanan ini pada tanggal dan waktu tersebut",
+        "Penerima sudah memiliki Health Pass aktif untuk layanan dan jadwal tersebut",
         409,
       );
     }
 
     const [pendingOrderRows] = await connection.query(
       `
-          SELECT
-            id_order,
-            payment_status,
-            order_status,
-            booking_at,
-            id_customer,
-            id_service
-
-          FROM orders
-
-          WHERE id_customer = ?
-            AND id_service = ?
-            AND booking_at = ?
-            AND payment_status = 'PENDING'
-            AND order_status = 'PENDING'
-
-          LIMIT 1
-        `,
-      [id_customer, id_service, booking_at],
+        SELECT o.id_order
+        FROM orders o
+        WHERE ${recipientWhere}
+          AND o.id_service = ?
+          AND o.booking_at = ?
+          AND o.payment_status = 'PENDING'
+          AND o.order_status = 'PENDING'
+        LIMIT 1
+      `,
+      [recipientId, Number(id_service), booking_at],
     );
 
     if (pendingOrderRows.length > 0) {
       throw errorWithStatus(
-        "Anda masih memiliki pembayaran yang belum selesai untuk layanan dan jadwal tersebut",
+        "Penerima masih memiliki pembayaran yang belum selesai untuk layanan dan jadwal tersebut",
         409,
       );
     }
 
     const id_order = randomUUID();
-
     const sub_total = String(price);
-
     const total = String(price);
 
     const [result] = await connection.query(
       `
-          INSERT INTO orders (
-            id_order,
-            sub_total,
-            total,
-            payment_method,
-            payment_status,
-            order_status,
-            paid_at,
-            booking_at,
-            dana_payment_id,
-            payment_expired_at,
-            payment_updated_at,
-            id_customer,
-            id_service
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
+        INSERT INTO orders (
+          id_order,
+          sub_total,
+          total,
+          payment_method,
+          payment_status,
+          order_status,
+          paid_at,
+          booking_at,
+          dana_payment_id,
+          payment_expired_at,
+          payment_updated_at,
+          id_customer,
+          id_guest,
+          id_service
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
       [
         id_order,
         sub_total,
         total,
-        payment_method,
-
+        normalizedPaymentMethod,
         "PENDING",
         "PENDING",
-
         null,
-
         booking_at,
-
         null,
         null,
         null,
-
-        id_customer,
-        id_service,
+        hasCustomer ? Number(id_customer) : null,
+        hasGuest ? Number(id_guest) : null,
+        Number(id_service),
       ],
     );
 
-    if (result.affectedRows === 0) {
+    if (result.affectedRows !== 1) {
       throw errorWithStatus("Order gagal dibuat", 500);
     }
 
@@ -314,7 +354,6 @@ export async function createOrder(
     return id_order;
   } catch (error) {
     await connection.rollback();
-
     throw error;
   } finally {
     connection.release();
@@ -343,6 +382,32 @@ export async function getAllOrders() {
         c.email_customer,
         c.phone_number_customer,
 
+        o.id_guest,
+        g.name_guest,
+        g.email_guest,
+        g.phone_number_guest,
+
+        CASE
+          WHEN o.id_guest IS NOT NULL
+          THEN 'GUEST'
+          ELSE 'CUSTOMER'
+        END AS recipient_type,
+
+        COALESCE(
+          g.name_guest,
+          c.name_customer
+        ) AS recipient_name,
+
+        COALESCE(
+          g.email_guest,
+          c.email_customer
+        ) AS recipient_email,
+
+        COALESCE(
+          g.phone_number_guest,
+          c.phone_number_customer
+        ) AS recipient_phone,
+
         o.id_service,
         s.name_service,
         s.price_service,
@@ -353,8 +418,11 @@ export async function getAllOrders() {
 
       FROM orders o
 
-      INNER JOIN customers c
+      LEFT JOIN customers c
         ON o.id_customer = c.id_customer
+
+      LEFT JOIN guests g
+        ON o.id_guest = g.id_guest
 
       INNER JOIN services s
         ON o.id_service = s.id_service
@@ -391,6 +459,32 @@ export async function getOrderById(id_order) {
         c.email_customer,
         c.phone_number_customer,
 
+        o.id_guest,
+        g.name_guest,
+        g.email_guest,
+        g.phone_number_guest,
+
+        CASE
+          WHEN o.id_guest IS NOT NULL
+          THEN 'GUEST'
+          ELSE 'CUSTOMER'
+        END AS recipient_type,
+
+        COALESCE(
+          g.name_guest,
+          c.name_customer
+        ) AS recipient_name,
+
+        COALESCE(
+          g.email_guest,
+          c.email_customer
+        ) AS recipient_email,
+
+        COALESCE(
+          g.phone_number_guest,
+          c.phone_number_customer
+        ) AS recipient_phone,
+
         o.id_service,
         s.name_service,
         s.price_service,
@@ -403,8 +497,11 @@ export async function getOrderById(id_order) {
 
       FROM orders o
 
-      INNER JOIN customers c
+      LEFT JOIN customers c
         ON o.id_customer = c.id_customer
+
+      LEFT JOIN guests g
+        ON o.id_guest = g.id_guest
 
       INNER JOIN services s
         ON o.id_service = s.id_service
@@ -413,7 +510,6 @@ export async function getOrderById(id_order) {
         ON s.id_provider = p.id_provider
 
       WHERE o.id_order = ?
-
       LIMIT 1
     `,
     [id_order],
@@ -487,17 +583,53 @@ export async function getOrdersByProvider(id_provider) {
         c.email_customer,
         c.phone_number_customer,
 
+        o.id_guest,
+        g.name_guest,
+        g.email_guest,
+        g.phone_number_guest,
+
+        CASE
+          WHEN o.id_guest IS NOT NULL
+          THEN 'GUEST'
+          ELSE 'CUSTOMER'
+        END AS recipient_type,
+
+        COALESCE(
+          g.name_guest,
+          c.name_customer
+        ) AS recipient_name,
+
+        COALESCE(
+          g.email_guest,
+          c.email_customer
+        ) AS recipient_email,
+
+        COALESCE(
+          g.phone_number_guest,
+          c.phone_number_customer
+        ) AS recipient_phone,
+
         o.id_service,
         s.name_service,
-        s.price_service
+        s.price_service,
+        s.image_service,
+
+        s.id_provider,
+        p.name_provider
 
       FROM orders o
 
-      INNER JOIN customers c
+      LEFT JOIN customers c
         ON o.id_customer = c.id_customer
+
+      LEFT JOIN guests g
+        ON o.id_guest = g.id_guest
 
       INNER JOIN services s
         ON o.id_service = s.id_service
+
+      INNER JOIN providers p
+        ON s.id_provider = p.id_provider
 
       WHERE s.id_provider = ?
 
