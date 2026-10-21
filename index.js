@@ -14,6 +14,7 @@ import balanceRoute from "./routes/balanceRoute.js";
 import providerCategoryRoute from "./routes/providerCategoryRoute.js";
 import providerRoleRoute from "./routes/providerRoleRoute.js";
 import locationRoute from "./routes/locationRoute.js";
+import guestRoute from "./routes/guestRoute.js";
 
 import danaRoute from "./3rd/routes/danaRoute.js";
 import danaPaymentRoute from "./3rd/routes/danaPaymentRoute.js";
@@ -64,6 +65,7 @@ app.use(balanceRoute);
 app.use(providerCategoryRoute);
 app.use(providerRoleRoute);
 app.use(locationRoute);
+app.use(guestRoute);
 
 app.use("/api/dana", danaRoute);
 app.use("/api/dana/payment", danaPaymentRoute);
