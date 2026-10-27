@@ -108,7 +108,7 @@ router.get("/service/:serviceId/branches", getBranchesByService);
 // verifyToken harus memverifikasi JWT user internal,
 // bukan mempercayai id_user dari body request.
 
-router.use(verifyToken);
+router.use("/provider-group", verifyToken);
 
 // GET ALL
 router.get("/provider-group/get-all", getAllProviderGroups);
