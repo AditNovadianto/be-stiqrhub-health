@@ -16,6 +16,10 @@ import providerRoleRoute from "./routes/providerRoleRoute.js";
 import locationRoute from "./routes/locationRoute.js";
 import guestRoute from "./routes/guestRoute.js";
 import providerGroupRoute from "./routes/providerGroupRoute.js";
+import providerBankAccountRoute from "./routes/providerBankAccountRoute.js";
+// import providerSettlementRoute from "./routes/providerSettlementRoute.js";
+
+// import { startProviderSettlementCron } from "./jobs/providerSettlementCron.js";
 
 import danaRoute from "./3rd/routes/danaRoute.js";
 import danaPaymentRoute from "./3rd/routes/danaPaymentRoute.js";
@@ -68,6 +72,8 @@ app.use(providerRoleRoute);
 app.use(locationRoute);
 app.use(guestRoute);
 app.use(providerGroupRoute);
+app.use(providerBankAccountRoute);
+// app.use(providerSettlementRoute);
 
 app.use("/api/dana", danaRoute);
 app.use("/api/dana/payment", danaPaymentRoute);
@@ -76,4 +82,6 @@ app.post("/v1.0/debit/notify", finishNotify);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  // startProviderSettlementCron();
 });
