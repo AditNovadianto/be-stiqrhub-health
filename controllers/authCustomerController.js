@@ -340,7 +340,7 @@ export const signInCustomer = async (req, res) => {
     const challenge = createOtpChallenge(customer, "CUSTOMER_LOGIN_OTP");
 
     // 3. Kirim email
-    await sendOtpEmail(email, challenge.otp);
+    await sendOtpEmail(email, challenge.otp, customer.name_customer);
 
     // 4. Kirim verification token
     return res.status(200).json({
@@ -387,7 +387,7 @@ export const resendCustomerOtp = async (req, res) => {
       purpose === "REGISTER" ? "CUSTOMER_REGISTER_OTP" : "CUSTOMER_LOGIN_OTP",
     );
 
-    await sendOtpEmail(email, challenge.otp);
+    await sendOtpEmail(email, challenge.otp, customer.name_customer);
 
     return res.status(200).json({
       success: true,
