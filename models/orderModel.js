@@ -376,6 +376,7 @@ export async function getAllOrders() {
         o.dana_payment_id,
         o.payment_expired_at,
         o.payment_updated_at,
+        o.id_provider_settlement,
 
         o.id_customer,
         c.name_customer,
@@ -453,6 +454,7 @@ export async function getOrderById(id_order) {
         o.dana_payment_id,
         o.payment_expired_at,
         o.payment_updated_at,
+        o.id_provider_settlement,
 
         o.id_customer,
         c.name_customer,
@@ -534,6 +536,7 @@ export async function getOrdersByCustomer(id_customer) {
         o.dana_payment_id,
         o.payment_expired_at,
         o.payment_updated_at,
+        o.id_provider_settlement,
 
         o.id_service,
         s.name_service,
@@ -577,6 +580,7 @@ export async function getOrdersByProvider(id_provider) {
         o.dana_payment_id,
         o.payment_expired_at,
         o.payment_updated_at,
+        o.id_provider_settlement,
 
         o.id_customer,
         c.name_customer,

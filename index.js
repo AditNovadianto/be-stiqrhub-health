@@ -17,10 +17,10 @@ import locationRoute from "./routes/locationRoute.js";
 import guestRoute from "./routes/guestRoute.js";
 import providerGroupRoute from "./routes/providerGroupRoute.js";
 import providerBankAccountRoute from "./routes/providerBankAccountRoute.js";
-// import providerSettlementRoute from "./routes/providerSettlementRoute.js";
+import providerSettlementRoute from "./routes/providerSettlementRoute.js";
 
 // Cron Job
-// import { startProviderSettlementCron } from "./jobs/providerSettlementCron.js";
+import { startProviderSettlementCron } from "./jobs/providerSettlementCron.js";
 
 // Dana Route
 import danaRoute from "./3rd/dana/routes/danaRoute.js";
@@ -78,7 +78,7 @@ app.use(locationRoute);
 app.use(guestRoute);
 app.use(providerGroupRoute);
 app.use(providerBankAccountRoute);
-// app.use(providerSettlementRoute);
+app.use(providerSettlementRoute);
 
 // Dana Route
 app.use("/api/dana", danaRoute);
@@ -92,5 +92,5 @@ app.use("/api/nobu/qris", nobuQrisRoute);
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 
-  // startProviderSettlementCron();
+  startProviderSettlementCron();
 });
