@@ -9,11 +9,11 @@ import { danaPaymentConfig } from "../config/danaPayment.js";
 
 import { verifySnapSignature } from "../utils/danaSnapSignature.js";
 
-import * as orderModel from "../../models/orderModel.js";
+import * as orderModel from "../../../models/orderModel.js";
 
-import { generateQrToken } from "../../controllers/healthPassesController.js";
+import { generateQrToken } from "../../../controllers/healthPassesController.js";
 
-import { sendHealthPassEmail } from "../../utils/mailer.js";
+import { sendHealthPassEmail } from "../../../utils/mailer.js";
 
 // Uncomment this to debug the public key fingerprint if needed
 // import crypto from "crypto";

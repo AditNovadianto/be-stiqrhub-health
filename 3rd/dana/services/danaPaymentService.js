@@ -1,8 +1,8 @@
 // 3rd/services/danaPaymentService.js
 
-import * as orderModel from "../../models/orderModel.js";
+import * as orderModel from "../../../models/orderModel.js";
 
-import { db } from "../../config/db.js";
+import { db } from "../../../config/db.js";
 
 import { decryptToken } from "../utils/tokenCrypto.js";
 

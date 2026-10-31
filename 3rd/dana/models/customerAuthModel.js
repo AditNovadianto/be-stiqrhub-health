@@ -1,4 +1,4 @@
-import { db } from "../../config/db.js";
+import { db } from "../../../config/db.js";
 
 import { encryptToken, decryptToken } from "../utils/tokenCrypto.js";
 

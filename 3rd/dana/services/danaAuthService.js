@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 
-import { db } from "../../config/db.js";
+import { db } from "../../../config/db.js";
 
 import { danaConfig, validateDanaConfig } from "../config/dana.js";
 
