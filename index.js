@@ -19,11 +19,16 @@ import providerGroupRoute from "./routes/providerGroupRoute.js";
 import providerBankAccountRoute from "./routes/providerBankAccountRoute.js";
 // import providerSettlementRoute from "./routes/providerSettlementRoute.js";
 
+// Cron Job
 // import { startProviderSettlementCron } from "./jobs/providerSettlementCron.js";
 
-import danaRoute from "./3rd/routes/danaRoute.js";
-import danaPaymentRoute from "./3rd/routes/danaPaymentRoute.js";
-import { finishNotify } from "./3rd/controllers/danaPaymentController.js";
+// Dana Route
+import danaRoute from "./3rd/dana/routes/danaRoute.js";
+import danaPaymentRoute from "./3rd/dana/routes/danaPaymentRoute.js";
+import { finishNotify } from "./3rd/dana/controllers/danaPaymentController.js";
+
+// Nobu Route
+import nobuQrisRoute from "./3rd/nobu/routes/nobuQrisRoute.js";
 
 dotenv.config();
 
@@ -75,10 +80,14 @@ app.use(providerGroupRoute);
 app.use(providerBankAccountRoute);
 // app.use(providerSettlementRoute);
 
+// Dana Route
 app.use("/api/dana", danaRoute);
 app.use("/api/dana/payment", danaPaymentRoute);
 
 app.post("/v1.0/debit/notify", finishNotify);
+
+// Nobu Route
+app.use("/api/nobu/qris", nobuQrisRoute);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
