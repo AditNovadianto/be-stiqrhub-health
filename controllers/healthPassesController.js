@@ -5,9 +5,7 @@ import * as healthPassesModel from "../models/healthPassesModel.js";
 // HELPERS
 const errorWithStatus = (message, statusCode) => {
   const error = new Error(message);
-
   error.statusCode = statusCode;
-
   return error;
 };
 
@@ -26,9 +24,6 @@ const isValidString = (value) => {
 };
 
 // AUTH HELPERS
-//
-// SESUAIKAN dua field ini jika payload JWT provider kamu
-// menggunakan nama yang berbeda.
 const getProviderId = (req) => {
   const idProvider = req.user?.id_provider;
 
@@ -60,7 +55,6 @@ const getCustomerId = (req) => {
 };
 
 // GENERATE HEALTH PASS QR TOKEN
-
 export const generateQrToken = (healthPass) => {
   if (
     !healthPass?.id_health_pass ||
@@ -70,6 +64,25 @@ export const generateQrToken = (healthPass) => {
   ) {
     throw errorWithStatus("Data Health Pass untuk QR tidak lengkap", 500);
   }
+
+  // valid_until menggunakan timezone WIB (+07:00)
+  const validUntilMs = Date.parse(healthPass.valid_until);
+
+  if (!Number.isFinite(validUntilMs)) {
+    throw errorWithStatus("Tanggal akhir Health Pass tidak valid", 500);
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  const validUntilSec = Math.floor(validUntilMs / 1000);
+
+  // QR untuk Health Pass yang masih berlaku
+  // mengikuti valid_until.
+  //
+  // Health Pass expired tetap dapat tampil di daftar.
+  // QR expired diberi masa hidup singkat, tetapi
+  // redeem tetap akan ditolak oleh validasi database.
+  const expiresAt = Math.max(validUntilSec, nowSec + 60);
 
   return jwt.sign(
     {
@@ -82,7 +95,7 @@ export const generateQrToken = (healthPass) => {
     getQrSecret(),
     {
       algorithm: "HS256",
-      expiresIn: process.env.HEALTH_PASS_QR_EXPIRES_IN || "30d",
+      expiresIn: expiresAt - nowSec,
     },
   );
 };
@@ -112,7 +125,7 @@ const verifyQrToken = (qr_token) => {
     }
 
     return payload;
-  } catch (error) {
+  } catch {
     throw errorWithStatus(
       "QR Health Pass tidak valid atau sudah kedaluwarsa",
       401,
@@ -126,7 +139,6 @@ const handleError = (res, error) => {
 
   return res.status(error.statusCode || 500).json({
     success: false,
-
     message: error.message || "Terjadi kesalahan pada Health Pass",
   });
 };
@@ -156,10 +168,8 @@ export async function getByOrder(req, res) {
 
     return res.status(200).json({
       success: true,
-
       data: {
         ...healthPass,
-
         qr_token: qrToken,
       },
     });
@@ -179,14 +189,12 @@ export async function getMyHealthPasses(req, res) {
     const data = rows.map((healthPass) => {
       return {
         ...healthPass,
-
         qr_token: generateQrToken(healthPass),
       };
     });
 
     return res.status(200).json({
       success: true,
-
       data,
     });
   } catch (error) {
@@ -204,7 +212,6 @@ export async function getProviderHealthPasses(req, res) {
 
     return res.status(200).json({
       success: true,
-
       data: rows,
     });
   } catch (error) {
@@ -247,9 +254,7 @@ export async function verifyByQr(req, res) {
 
     return res.status(200).json({
       success: true,
-
       message: "Health Pass valid",
-
       data: healthPass,
     });
   } catch (error) {
@@ -276,9 +281,7 @@ export async function verifyById(req, res) {
 
     return res.status(200).json({
       success: true,
-
       message: "Health Pass valid",
-
       data: healthPass,
     });
   } catch (error) {
@@ -324,17 +327,13 @@ export async function redeemByQr(req, res) {
     // REDEEM
     const result = await healthPassesModel.redeemHealthPass({
       id_health_pass: payload.id_health_pass,
-
       id_provider: idProvider,
-
       redeemed_by: idProviderUser,
     });
 
     return res.status(200).json({
       success: true,
-
       message: "Health Pass berhasil diredeem melalui QR",
-
       data: result,
     });
   } catch (error) {
@@ -365,17 +364,13 @@ export async function redeemById(req, res) {
     // REDEEM
     const result = await healthPassesModel.redeemHealthPass({
       id_health_pass: id_health_pass.trim(),
-
       id_provider: idProvider,
-
       redeemed_by: idProviderUser,
     });
 
     return res.status(200).json({
       success: true,
-
       message: "Health Pass berhasil diredeem melalui ID",
-
       data: result,
     });
   } catch (error) {

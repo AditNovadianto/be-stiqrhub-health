@@ -3,9 +3,7 @@ import { db } from "../config/db.js";
 // HELPERS
 const errorWithStatus = (message, statusCode) => {
   const error = new Error(message);
-
   error.statusCode = statusCode;
-
   return error;
 };
 
@@ -17,9 +15,7 @@ const normalizeHealthPassStatus = (value) => {
 
 const validateHealthPassTime = (healthPass) => {
   const now = new Date();
-
   const validFrom = new Date(healthPass.valid_from);
-
   const validUntil = new Date(healthPass.valid_until);
 
   if (Number.isNaN(validFrom.getTime()) || Number.isNaN(validUntil.getTime())) {
@@ -40,9 +36,22 @@ const HEALTH_PASS_SELECT = `
   SELECT
     hp.id_health_pass,
     hp.status_health_pass,
-    hp.valid_from,
-    hp.valid_until,
-    hp.booking_at,
+
+    CONCAT(
+      DATE_FORMAT(hp.valid_from, '%Y-%m-%dT%H:%i:%s'),
+      '+07:00'
+    ) AS valid_from,
+
+    CONCAT(
+      DATE_FORMAT(hp.valid_until, '%Y-%m-%dT%H:%i:%s'),
+      '+07:00'
+    ) AS valid_until,
+
+    CONCAT(
+      DATE_FORMAT(hp.booking_at, '%Y-%m-%dT%H:%i:%s'),
+      '+07:00'
+    ) AS booking_at,
+
     hp.redeemed_at,
     hp.redeemed_by,
     hp.id_order,
@@ -67,32 +76,28 @@ const HEALTH_PASS_SELECT = `
   FROM health_passes hp
 
   INNER JOIN orders o
-    ON hp.id_order =
-       o.id_order
+    ON hp.id_order = o.id_order
 
   INNER JOIN customers c
-    ON o.id_customer =
-       c.id_customer
+    ON o.id_customer = c.id_customer
 
   INNER JOIN services s
-    ON o.id_service =
-       s.id_service
+    ON o.id_service = s.id_service
 
   INNER JOIN providers p
-    ON s.id_provider =
-       p.id_provider
+    ON s.id_provider = p.id_provider
 `;
 
 // GET HEALTH PASS BY ID
 export async function getHealthPassById(id_health_pass) {
   const [rows] = await db.query(
     `
-        ${HEALTH_PASS_SELECT}
+      ${HEALTH_PASS_SELECT}
 
-        WHERE hp.id_health_pass = ?
+      WHERE hp.id_health_pass = ?
 
-        LIMIT 1
-      `,
+      LIMIT 1
+    `,
     [id_health_pass],
   );
 
@@ -103,12 +108,12 @@ export async function getHealthPassById(id_health_pass) {
 export async function getHealthPassByOrder(id_order) {
   const [rows] = await db.query(
     `
-        ${HEALTH_PASS_SELECT}
+      ${HEALTH_PASS_SELECT}
 
-        WHERE hp.id_order = ?
+      WHERE hp.id_order = ?
 
-        LIMIT 1
-      `,
+      LIMIT 1
+    `,
     [id_order],
   );
 
@@ -116,19 +121,16 @@ export async function getHealthPassByOrder(id_order) {
 }
 
 // GET HEALTH PASS BY ORDER + CUSTOMER
-//
-// Digunakan oleh Mini Program customer.
-// Customer hanya boleh melihat Health Pass miliknya sendiri.
 export async function getHealthPassByOrderForCustomer(id_order, id_customer) {
   const [rows] = await db.query(
     `
-        ${HEALTH_PASS_SELECT}
+      ${HEALTH_PASS_SELECT}
 
-        WHERE hp.id_order = ?
-          AND o.id_customer = ?
+      WHERE hp.id_order = ?
+        AND o.id_customer = ?
 
-        LIMIT 1
-      `,
+      LIMIT 1
+    `,
     [id_order, id_customer],
   );
 
@@ -139,13 +141,12 @@ export async function getHealthPassByOrderForCustomer(id_order, id_customer) {
 export async function getHealthPassesByCustomer(id_customer) {
   const [rows] = await db.query(
     `
-        ${HEALTH_PASS_SELECT}
+      ${HEALTH_PASS_SELECT}
 
-        WHERE o.id_customer = ?
+      WHERE o.id_customer = ?
 
-        ORDER BY
-          hp.booking_at DESC
-      `,
+      ORDER BY hp.booking_at DESC
+    `,
     [id_customer],
   );
 
@@ -156,13 +157,12 @@ export async function getHealthPassesByCustomer(id_customer) {
 export async function getHealthPassesByProvider(id_provider) {
   const [rows] = await db.query(
     `
-        ${HEALTH_PASS_SELECT}
+      ${HEALTH_PASS_SELECT}
 
-        WHERE s.id_provider = ?
+      WHERE s.id_provider = ?
 
-        ORDER BY
-          hp.booking_at DESC
-      `,
+      ORDER BY hp.booking_at DESC
+    `,
     [id_provider],
   );
 
@@ -170,11 +170,6 @@ export async function getHealthPassesByProvider(id_provider) {
 }
 
 // VALIDATE HEALTH PASS FOR PROVIDER
-//
-// Digunakan oleh:
-// - QR verify
-// - manual ID verify
-// - sebelum redeem
 export async function validateHealthPassForProvider(
   id_health_pass,
   id_provider,
@@ -219,14 +214,7 @@ export async function validateHealthPassForProvider(
 }
 
 // REDEEM HEALTH PASS
-//
-// Function ini dipakai oleh dua mekanisme:
-//
-// 1. QR redeem
-// 2. Manual ID redeem
-//
-// Semua masuk ke function yang sama agar business logic
-// tidak duplicated.
+// Digunakan oleh QR redeem dan manual ID redeem.
 export async function redeemHealthPass({
   id_health_pass,
   id_provider,
@@ -240,54 +228,72 @@ export async function redeemHealthPass({
     // 1. LOCK HEALTH PASS
     const [rows] = await connection.query(
       `
-          SELECT
-            hp.id_health_pass,
-            hp.status_health_pass,
-            hp.valid_from,
-            hp.valid_until,
-            hp.booking_at,
-            hp.redeemed_at,
-            hp.redeemed_by,
-            hp.id_order,
+        SELECT
+          hp.id_health_pass,
+          hp.status_health_pass,
 
-            o.id_customer,
-            o.id_service,
-            o.payment_status,
-            o.order_status,
+          CONCAT(
+            DATE_FORMAT(
+              hp.valid_from,
+              '%Y-%m-%dT%H:%i:%s'
+            ),
+            '+07:00'
+          ) AS valid_from,
 
-            s.id_provider,
-            s.name_service,
+          CONCAT(
+            DATE_FORMAT(
+              hp.valid_until,
+              '%Y-%m-%dT%H:%i:%s'
+            ),
+            '+07:00'
+          ) AS valid_until,
 
-            p.name_provider,
+          CONCAT(
+            DATE_FORMAT(
+              hp.booking_at,
+              '%Y-%m-%dT%H:%i:%s'
+            ),
+            '+07:00'
+          ) AS booking_at,
 
-            c.name_customer,
-            c.email_customer,
-            c.phone_number_customer
+          hp.redeemed_at,
+          hp.redeemed_by,
+          hp.id_order,
 
-          FROM health_passes hp
+          o.id_customer,
+          o.id_service,
+          o.payment_status,
+          o.order_status,
 
-          INNER JOIN orders o
-            ON hp.id_order =
-               o.id_order
+          s.id_provider,
+          s.name_service,
 
-          INNER JOIN services s
-            ON o.id_service =
-               s.id_service
+          p.name_provider,
 
-          INNER JOIN providers p
-            ON s.id_provider =
-               p.id_provider
+          c.name_customer,
+          c.email_customer,
+          c.phone_number_customer
 
-          INNER JOIN customers c
-            ON o.id_customer =
-               c.id_customer
+        FROM health_passes hp
 
-          WHERE hp.id_health_pass = ?
+        INNER JOIN orders o
+          ON hp.id_order = o.id_order
 
-          LIMIT 1
+        INNER JOIN services s
+          ON o.id_service = s.id_service
 
-          FOR UPDATE
-        `,
+        INNER JOIN providers p
+          ON s.id_provider = p.id_provider
+
+        INNER JOIN customers c
+          ON o.id_customer = c.id_customer
+
+        WHERE hp.id_health_pass = ?
+
+        LIMIT 1
+
+        FOR UPDATE
+      `,
       [id_health_pass],
     );
 
@@ -304,8 +310,8 @@ export async function redeemHealthPass({
 
     // 3. VALIDATE ORDER
     if (
-      healthPass.payment_status !== "APPROVED" ||
-      healthPass.order_status !== "APPROVED"
+      normalizeHealthPassStatus(healthPass.payment_status) !== "APPROVED" ||
+      normalizeHealthPassStatus(healthPass.order_status) !== "APPROVED"
     ) {
       throw errorWithStatus("Order Health Pass belum disetujui", 409);
     }
@@ -330,21 +336,16 @@ export async function redeemHealthPass({
     // 6. REDEEM
     const [result] = await connection.query(
       `
-          UPDATE health_passes
+        UPDATE health_passes
 
-          SET
-            status_health_pass =
-              'REDEEMED',
+        SET
+          status_health_pass = 'REDEEMED',
+          redeemed_at = NOW(),
+          redeemed_by = ?
 
-            redeemed_at =
-              NOW(),
-
-            redeemed_by = ?
-
-          WHERE id_health_pass = ?
-            AND status_health_pass =
-              'ACTIVE'
-        `,
+        WHERE id_health_pass = ?
+          AND status_health_pass = 'ACTIVE'
+      `,
       [redeemed_by, id_health_pass],
     );
 
@@ -355,22 +356,44 @@ export async function redeemHealthPass({
     // 7. GET UPDATED HEALTH PASS
     const [updatedRows] = await connection.query(
       `
-          SELECT
-            id_health_pass,
-            status_health_pass,
-            valid_from,
-            valid_until,
-            booking_at,
-            redeemed_at,
-            redeemed_by,
-            id_order
+        SELECT
+          id_health_pass,
+          status_health_pass,
 
-          FROM health_passes
+          CONCAT(
+            DATE_FORMAT(
+              valid_from,
+              '%Y-%m-%dT%H:%i:%s'
+            ),
+            '+07:00'
+          ) AS valid_from,
 
-          WHERE id_health_pass = ?
+          CONCAT(
+            DATE_FORMAT(
+              valid_until,
+              '%Y-%m-%dT%H:%i:%s'
+            ),
+            '+07:00'
+          ) AS valid_until,
 
-          LIMIT 1
-        `,
+          CONCAT(
+            DATE_FORMAT(
+              booking_at,
+              '%Y-%m-%dT%H:%i:%s'
+            ),
+            '+07:00'
+          ) AS booking_at,
+
+          redeemed_at,
+          redeemed_by,
+          id_order
+
+        FROM health_passes
+
+        WHERE id_health_pass = ?
+
+        LIMIT 1
+      `,
       [id_health_pass],
     );
 
@@ -387,7 +410,6 @@ export async function redeemHealthPass({
     };
   } catch (error) {
     await connection.rollback();
-
     throw error;
   } finally {
     connection.release();
