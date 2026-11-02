@@ -180,10 +180,17 @@ export const createNobuQrisController = async (req, res) => {
     // GENERATE SUCCESS -> PENDING
     // ========================================
 
-    await updateNobuOrderStatus({
+    const persisted = await updateNobuOrderStatus({
       orderId: order.id_order,
       status: "PENDING",
     });
+
+    if (
+      persisted?.payment_status !== "PENDING" ||
+      persisted?.order_status !== "PENDING"
+    ) {
+      throw new Error("Status order berubah sebelum QRIS ditampilkan");
+    }
 
     return res.status(201).json({
       success: true,
@@ -217,12 +224,56 @@ export const createNobuQrisController = async (req, res) => {
       });
     }
 
-    // Jika QR sudah diterbitkan tetapi proses
-    // database berikutnya gagal, jangan retry.
+    // Middleware might have created the QR even when a subsequent database
+    // operation/verification failed. Re-read once, never generate a second QR.
     nobuLog.error("DATABASE", "Order requires reconciliation", error, {
       reference: order.id_order,
       qrGenerated: Boolean(qris),
     });
+
+    if (qris) {
+      try {
+        const persisted = await findNobuOrderById(order.id_order);
+        if (
+          persisted?.payment_method === "NOBU_QRIS" &&
+          persisted.payment_status === "PENDING" &&
+          persisted.order_status === "PENDING"
+        ) {
+          nobuLog.warn(
+            "RECOVERY",
+            "QRIS recovered from confirmed PENDING order",
+            {
+              reference: order.id_order,
+            },
+          );
+          return res.status(201).json({
+            success: true,
+            message: "NOBU QRIS berhasil dibuat",
+            data: {
+              id_order: order.id_order,
+              partner_reference_no: qris.partnerReferenceNo,
+              payment_method: "NOBU_QRIS",
+              payment_status: "PENDING",
+              amount: order.amount,
+              currency: "IDR",
+              qr_content: qris.qrContent,
+              qr_url: qris.qrUrl,
+              merchant_name: qris.merchantName,
+              expired_at: null,
+            },
+          });
+        }
+      } catch (readError) {
+        nobuLog.error(
+          "RECOVERY",
+          "Could not verify order for recovery",
+          readError,
+          {
+            reference: order.id_order,
+          },
+        );
+      }
+    }
 
     return res.status(503).json({
       success: false,
