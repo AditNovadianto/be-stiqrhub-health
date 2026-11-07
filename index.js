@@ -18,6 +18,8 @@ import guestRoute from "./routes/guestRoute.js";
 import providerGroupRoute from "./routes/providerGroupRoute.js";
 import providerBankAccountRoute from "./routes/providerBankAccountRoute.js";
 import providerSettlementRoute from "./routes/providerSettlementRoute.js";
+import userRoleRoute from "./routes/userRoleRoute.js";
+import bankCatalogRoute from "./routes/bankCatalogRoute.js";
 
 // Cron Job
 import { startProviderSettlementCron } from "./jobs/providerSettlementCron.js";
@@ -74,11 +76,13 @@ app.use(healthPassesRoute);
 app.use(balanceRoute);
 app.use(providerCategoryRoute);
 app.use(providerRoleRoute);
+app.use(userRoleRoute);
 app.use(locationRoute);
 app.use(guestRoute);
 app.use(providerGroupRoute);
 app.use(providerBankAccountRoute);
 app.use(providerSettlementRoute);
+app.use(bankCatalogRoute);
 
 // Dana Route
 app.use("/api/dana", danaRoute);

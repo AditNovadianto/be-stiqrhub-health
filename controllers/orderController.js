@@ -25,6 +25,20 @@ const isValidUuid = (id) => {
   );
 };
 
+const isValidOrderId = (id) => {
+  if (typeof id !== "string") {
+    return false;
+  }
+
+  const normalizedId = id.trim();
+
+  return (
+    normalizedId.length > 0 &&
+    normalizedId.length <= 255 &&
+    /^[a-zA-Z0-9_-]+$/.test(normalizedId)
+  );
+};
+
 const normalizeStatus = (value) => {
   if (typeof value !== "string") {
     return null;
@@ -192,7 +206,9 @@ export const getAllOrders = async (req, res) => {
 export const getOrderById = async (req, res) => {
   const { id } = req.params;
 
-  if (!isValidUuid(id)) {
+  // Validasi ID order sebagai string.
+  // Mendukung UUID dan ID alfanumerik.
+  if (!isValidOrderId(id)) {
     return res.status(400).json({
       success: false,
       message: "ID order tidak valid",
@@ -200,7 +216,9 @@ export const getOrderById = async (req, res) => {
   }
 
   try {
-    const order = await orderModel.getOrderById(id);
+    const normalizedId = id.trim();
+
+    const order = await orderModel.getOrderById(normalizedId);
 
     if (!order) {
       return res.status(404).json({
@@ -209,10 +227,11 @@ export const getOrderById = async (req, res) => {
       });
     }
 
-    const healthPass = await orderModel.getHealthPassByOrder(id);
+    const healthPass = await orderModel.getHealthPassByOrder(normalizedId);
 
     return res.status(200).json({
       success: true,
+      message: "Detail order berhasil diambil",
       data: {
         ...order,
         health_pass: healthPass,

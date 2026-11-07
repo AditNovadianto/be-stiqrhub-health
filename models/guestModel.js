@@ -207,3 +207,23 @@ export async function getGuestById(id_guest, id_customer) {
 
   return rows[0] || null;
 }
+
+export async function getGuestByIdAdmin(id_guest) {
+  const [rows] = await db.query(
+    `
+      SELECT
+        id_guest,
+        name_guest,
+        email_guest,
+        gender_guest,
+        phone_number_guest,
+        id_customer
+      FROM guests
+      WHERE id_guest = ?
+      LIMIT 1
+    `,
+    [id_guest],
+  );
+
+  return rows[0] ?? null;
+}

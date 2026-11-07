@@ -177,3 +177,41 @@ export async function getGuestById(req, res) {
     return handleError(res, error);
   }
 }
+
+export async function getGuestByIdAdmin(req, res) {
+  try {
+    const { id_guest } = req.params;
+
+    if (
+      !/^[1-9]\d*$/.test(String(id_guest)) ||
+      !Number.isSafeInteger(Number(id_guest))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "ID guest tidak valid",
+      });
+    }
+
+    const guest = await guestModel.getGuestByIdAdmin(Number(id_guest));
+
+    if (!guest) {
+      return res.status(404).json({
+        success: false,
+        message: "Guest tidak ditemukan",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Detail guest berhasil diambil",
+      data: guest,
+    });
+  } catch (error) {
+    console.error("[ADMIN GUEST ERROR]", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan pada server",
+    });
+  }
+}

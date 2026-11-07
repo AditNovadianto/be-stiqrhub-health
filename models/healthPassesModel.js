@@ -32,23 +32,33 @@ const validateHealthPassTime = (healthPass) => {
 };
 
 // BASE SELECT
+
 const HEALTH_PASS_SELECT = `
   SELECT
     hp.id_health_pass,
     hp.status_health_pass,
 
     CONCAT(
-      DATE_FORMAT(hp.valid_from, '%Y-%m-%dT%H:%i:%s'),
+      DATE_FORMAT(
+        hp.valid_from,
+        '%Y-%m-%dT%H:%i:%s'
+      ),
       '+07:00'
     ) AS valid_from,
 
     CONCAT(
-      DATE_FORMAT(hp.valid_until, '%Y-%m-%dT%H:%i:%s'),
+      DATE_FORMAT(
+        hp.valid_until,
+        '%Y-%m-%dT%H:%i:%s'
+      ),
       '+07:00'
     ) AS valid_until,
 
     CONCAT(
-      DATE_FORMAT(hp.booking_at, '%Y-%m-%dT%H:%i:%s'),
+      DATE_FORMAT(
+        hp.booking_at,
+        '%Y-%m-%dT%H:%i:%s'
+      ),
       '+07:00'
     ) AS booking_at,
 
@@ -57,13 +67,51 @@ const HEALTH_PASS_SELECT = `
     hp.id_order,
 
     o.id_customer,
+    o.id_guest,
     o.id_service,
     o.payment_status,
     o.order_status,
 
-    c.name_customer,
-    c.email_customer,
-    c.phone_number_customer,
+    CASE
+      WHEN o.id_guest IS NOT NULL
+        THEN 'GUEST'
+
+      WHEN o.id_customer IS NOT NULL
+        THEN 'CUSTOMER'
+
+      ELSE 'UNKNOWN'
+    END AS recipient_type,
+
+    CASE
+      WHEN o.id_guest IS NOT NULL
+        THEN g.name_guest
+
+      ELSE c.name_customer
+    END AS name_customer,
+
+    CASE
+      WHEN o.id_guest IS NOT NULL
+        THEN g.email_guest
+
+      ELSE c.email_customer
+    END AS email_customer,
+
+    CASE
+      WHEN o.id_guest IS NOT NULL
+        THEN g.phone_number_guest
+
+      ELSE c.phone_number_customer
+    END AS phone_number_customer,
+
+    CASE
+      WHEN o.id_guest IS NOT NULL
+        THEN NULL
+
+      ELSE DATE_FORMAT(
+        c.dob_customer,
+        '%Y-%m-%d'
+      )
+    END AS dob_customer,
 
     s.name_service,
     s.price_service,
@@ -78,8 +126,11 @@ const HEALTH_PASS_SELECT = `
   INNER JOIN orders o
     ON hp.id_order = o.id_order
 
-  INNER JOIN customers c
+  LEFT JOIN customers c
     ON o.id_customer = c.id_customer
+
+  LEFT JOIN guests g
+    ON o.id_guest = g.id_guest
 
   INNER JOIN services s
     ON o.id_service = s.id_service
@@ -260,19 +311,55 @@ export async function redeemHealthPass({
           hp.redeemed_by,
           hp.id_order,
 
+          -- ORDER INFORMATION
           o.id_customer,
+          o.id_guest,
           o.id_service,
           o.payment_status,
           o.order_status,
 
+          -- PROVIDER AND SERVICE
           s.id_provider,
           s.name_service,
-
           p.name_provider,
 
-          c.name_customer,
-          c.email_customer,
-          c.phone_number_customer
+          -- RECIPIENT TYPE
+          CASE
+            WHEN o.id_guest IS NOT NULL
+              THEN 'GUEST'
+            ELSE 'CUSTOMER'
+          END AS recipient_type,
+
+          -- RECIPIENT NAME
+          CASE
+            WHEN o.id_guest IS NOT NULL
+              THEN g.name_guest
+            ELSE c.name_customer
+          END AS name_customer,
+
+          -- RECIPIENT EMAIL
+          CASE
+            WHEN o.id_guest IS NOT NULL
+              THEN g.email_guest
+            ELSE c.email_customer
+          END AS email_customer,
+
+          -- RECIPIENT PHONE NUMBER
+          CASE
+            WHEN o.id_guest IS NOT NULL
+              THEN g.phone_number_guest
+            ELSE c.phone_number_customer
+          END AS phone_number_customer,
+
+          -- DOB: CUSTOMER ONLY
+          CASE
+            WHEN o.id_guest IS NOT NULL
+              THEN NULL
+            ELSE DATE_FORMAT(
+              c.dob_customer,
+              '%Y-%m-%d'
+            )
+          END AS dob_customer
 
         FROM health_passes hp
 
@@ -285,8 +372,13 @@ export async function redeemHealthPass({
         INNER JOIN providers p
           ON s.id_provider = p.id_provider
 
-        INNER JOIN customers c
+        -- CUSTOMER IS OPTIONAL FOR GUEST ORDERS
+        LEFT JOIN customers c
           ON o.id_customer = c.id_customer
+
+        -- GUEST IS OPTIONAL FOR CUSTOMER ORDERS
+        LEFT JOIN guests g
+          ON o.id_guest = g.id_guest
 
         WHERE hp.id_health_pass = ?
 
