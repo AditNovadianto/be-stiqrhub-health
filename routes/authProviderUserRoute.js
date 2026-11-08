@@ -8,6 +8,7 @@ import {
   resetPasswordProviderUser,
   signInProviderUser,
   signUpProviderUser,
+  updateProviderUserStatus,
 } from "../controllers/authProviderUserController.js";
 
 const router = express.Router();
@@ -22,5 +23,10 @@ router.get(
 );
 router.post("/provider-user/forgot-password", forgotPasswordProviderUser);
 router.post("/provider-user/reset-password/:token", resetPasswordProviderUser);
+router.patch(
+  "/provider-user/:id/status",
+  verifyToken,
+  updateProviderUserStatus,
+);
 
 export default router;

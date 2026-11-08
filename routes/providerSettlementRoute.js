@@ -95,12 +95,28 @@ router.use("/provider-settlement", (req, res, next) => {
     });
   }
 
-  const allowed = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+  const allowedOrigins = new Set([
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+    "https://health.stiqr.id",
+  ]);
 
-  if (!allowed.has(req.socket.remoteAddress)) {
+  const allowedLocalIPs = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
+  const requestOrigin = req.get("origin");
+  const remoteAddress = req.socket.remoteAddress;
+
+  const isLocalRequest = allowedLocalIPs.has(remoteAddress);
+
+  const isAllowedOrigin =
+    typeof requestOrigin === "string" && allowedOrigins.has(requestOrigin);
+
+  if (!isLocalRequest && !isAllowedOrigin) {
     return res.status(403).json({
       success: false,
-      message: "Settlement API hanya dapat diakses melalui localhost",
+      message: "Akses Settlement tidak diizinkan",
     });
   }
 

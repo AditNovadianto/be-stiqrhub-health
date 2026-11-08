@@ -174,7 +174,7 @@ export async function updateProvider(id_provider, data) {
       `UPDATE providers
        SET ${fields.join(", ")}
        WHERE id_provider = ?
-       AND status_provider = 'PENDING_OTP'`,
+       AND status_provider IN ('PENDING_OTP', 'REJECTED')`,
       [...values, id_provider],
     );
 
@@ -406,3 +406,146 @@ export async function rejectProvider(id_provider) {
     throw error;
   }
 }
+
+// OTP REVISION
+export const createProviderRevisionOtp = async (id_provider) => {
+  const provider = await getProviderById(id_provider);
+
+  if (!provider) {
+    const error = new Error("Provider tidak ditemukan");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (provider.status_provider !== "REJECTED") {
+    const error = new Error(
+      "OTP revisi hanya tersedia untuk provider REJECTED",
+    );
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const otp = randomInt(0, 1000000).toString().padStart(6, "0");
+
+  const jti = randomUUID();
+  const email = provider.email_provider.trim().toLowerCase();
+
+  // Uses existing PROVIDER_OTP_SECRET
+  const otpHash = createHmac("sha256", getOtpSecret())
+    .update(`REVISION:${id_provider}:${email}:${jti}:${otp}`)
+    .digest("hex");
+
+  const otpToken = jwt.sign(
+    {
+      purpose: "PROVIDER_REVISION_OTP",
+      email_provider: email,
+      otp_hash: otpHash,
+    },
+    getOtpSecret(),
+    {
+      algorithm: "HS256",
+      subject: String(id_provider),
+      issuer: "stiQR-b2b",
+      audience: "provider-revision-otp",
+      jwtid: jti,
+      expiresIn: "5m",
+    },
+  );
+
+  return {
+    id_provider: Number(id_provider),
+    email_provider: email,
+    name_provider: provider.name_provider,
+    otp,
+    otp_token: otpToken,
+    expires_in_seconds: 300,
+  };
+};
+
+// VERIFY OTP REVISION
+export const verifyProviderRevisionOtp = async (
+  id_provider,
+  email_provider,
+  otp,
+  otp_token,
+) => {
+  if (
+    typeof email_provider !== "string" ||
+    typeof otp_token !== "string" ||
+    !/^\d{6}$/.test(String(otp))
+  ) {
+    return false;
+  }
+
+  const email = email_provider.trim().toLowerCase();
+
+  const provider = await getProviderById(id_provider);
+
+  if (
+    !provider ||
+    provider.status_provider !== "REJECTED" ||
+    provider.email_provider.trim().toLowerCase() !== email
+  ) {
+    return false;
+  }
+
+  let payload;
+
+  try {
+    payload = jwt.verify(otp_token, getOtpSecret(), {
+      algorithms: ["HS256"],
+      issuer: "stiQR-b2b",
+      audience: "provider-revision-otp",
+      subject: String(id_provider),
+    });
+  } catch (error) {
+    if (
+      error.name === "TokenExpiredError" ||
+      error.name === "JsonWebTokenError" ||
+      error.name === "NotBeforeError"
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
+
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    payload.purpose !== "PROVIDER_REVISION_OTP" ||
+    payload.email_provider !== email ||
+    typeof payload.jti !== "string" ||
+    typeof payload.otp_hash !== "string" ||
+    !/^[a-f0-9]{64}$/.test(payload.otp_hash)
+  ) {
+    return false;
+  }
+
+  const expectedHash = createHmac("sha256", getOtpSecret())
+    .update(`REVISION:${id_provider}:${email}:${payload.jti}:${otp}`)
+    .digest("hex");
+
+  const expectedBuffer = Buffer.from(expectedHash, "hex");
+  const actualBuffer = Buffer.from(payload.otp_hash, "hex");
+
+  return (
+    expectedBuffer.length === actualBuffer.length &&
+    timingSafeEqual(expectedBuffer, actualBuffer)
+  );
+};
+
+// RESUBMIT PROVIDER
+export const resubmitProvider = async (id_provider) => {
+  const [result] = await db.query(
+    `
+      UPDATE providers
+      SET status_provider = 'PENDING_APPROVAL'
+      WHERE id_provider = ?
+        AND status_provider = 'REJECTED'
+    `,
+    [id_provider],
+  );
+
+  return result.affectedRows === 1;
+};

@@ -549,3 +549,123 @@ export const resetPasswordProviderUser = async (req, res) => {
     });
   }
 };
+
+// --- UPDATE PROVIDER USER STATUS ---
+export const updateProviderUserStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status_provider_user } = req.body ?? {};
+
+  const idProviderUser = Number(id);
+
+  if (!/^[1-9]\d*$/.test(String(id)) || !Number.isSafeInteger(idProviderUser)) {
+    return res.status(400).json({
+      success: false,
+      message: "ID Provider User tidak valid.",
+    });
+  }
+
+  if (
+    typeof status_provider_user !== "string" ||
+    !["ACTIVE", "INACTIVE"].includes(status_provider_user.trim().toUpperCase())
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Status Provider User hanya boleh ACTIVE atau INACTIVE.",
+    });
+  }
+
+  const newStatus = status_provider_user.trim().toUpperCase();
+
+  try {
+    const [rows] = await db.query(
+      `
+        SELECT
+          id_provider_user,
+          name_provider_user,
+          email_provider_user,
+          phone_number_provider_user,
+          status_provider_user,
+          id_provider,
+          id_provider_role
+        FROM provider_users
+        WHERE id_provider_user = ?
+        LIMIT 1
+      `,
+      [idProviderUser],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider User tidak ditemukan.",
+      });
+    }
+
+    const existingUser = rows[0];
+
+    if (
+      String(existingUser.status_provider_user).trim().toUpperCase() ===
+      newStatus
+    ) {
+      return res.status(200).json({
+        success: true,
+        message:
+          newStatus === "ACTIVE"
+            ? "Provider User sudah dalam status ACTIVE."
+            : "Provider User sudah dalam status INACTIVE.",
+        data: sanitizeProviderUser(existingUser),
+      });
+    }
+
+    const [result] = await db.query(
+      `
+        UPDATE provider_users
+        SET status_provider_user = ?
+        WHERE id_provider_user = ?
+      `,
+      [newStatus, idProviderUser],
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Status Provider User gagal diperbarui.",
+      });
+    }
+
+    const [updatedRows] = await db.query(
+      `
+        SELECT
+          id_provider_user,
+          name_provider_user,
+          email_provider_user,
+          phone_number_provider_user,
+          status_provider_user,
+          id_provider,
+          id_provider_role
+        FROM provider_users
+        WHERE id_provider_user = ?
+        LIMIT 1
+      `,
+      [idProviderUser],
+    );
+
+    const updatedUser = updatedRows[0];
+
+    return res.status(200).json({
+      success: true,
+      message:
+        newStatus === "ACTIVE"
+          ? "Provider User berhasil diaktifkan."
+          : "Provider User berhasil dinonaktifkan.",
+      data: sanitizeProviderUser(updatedUser),
+    });
+  } catch (error) {
+    console.error("[UPDATE PROVIDER USER STATUS]", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memperbarui status Provider User.",
+    });
+  }
+};

@@ -2,6 +2,7 @@ import * as providerModel from "../models/providerModel.js";
 import { sendOtpEmail } from "../utils/mailer.js";
 import { s3 } from "../config/s3.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import jwt from "jsonwebtoken";
 
 // CONSTANTS
 const REGISTRATION_FIELDS = [
@@ -209,7 +210,11 @@ export const createProvider = async (req, res) => {
       const otpData = await providerModel.createProviderOtp(providerId);
 
       // Kirim OTP asli melalui email.
-      await sendOtpEmail(otpData.email_provider, otpData.otp);
+      await sendOtpEmail(
+        otpData.email_provider,
+        otpData.otp,
+        data.name_provider,
+      );
 
       // JWT diberikan kepada frontend.
       return res.status(201).json({
@@ -324,12 +329,15 @@ export const updateProvider = async (req, res) => {
       });
     }
 
-    if (provider.status_provider !== "PENDING_OTP") {
+    const editableStatuses = ["PENDING_OTP", "REJECTED"];
+
+    if (!editableStatuses.includes(provider.status_provider)) {
       await deleteUploadedFiles(files);
 
       return res.status(409).json({
         success: false,
-        message: "Provider hanya dapat diperbarui sebelum OTP diverifikasi",
+        message:
+          "Provider hanya dapat diperbarui saat " + "PENDING_OTP atau REJECTED",
       });
     }
 
@@ -459,9 +467,15 @@ export const resendProviderOtp = async (req, res) => {
   }
 
   try {
+    const provider = await providerModel.getProviderById(id);
+
     const otpData = await providerModel.createProviderOtp(id);
 
-    await sendOtpEmail(otpData.email_provider, otpData.otp);
+    await sendOtpEmail(
+      otpData.email_provider,
+      otpData.otp,
+      provider.name_provider,
+    );
 
     return res.status(200).json({
       success: true,
@@ -599,6 +613,220 @@ export const rejectProvider = async (req, res) => {
       data: {
         id_provider: Number(id),
         status_provider: "REJECTED",
+      },
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+};
+
+// REVISION TOKEN HELPER
+const createRevisionAccessToken = (provider) => {
+  const secret = process.env.PROVIDER_REVISION_SECRET;
+
+  if (!secret || Buffer.byteLength(secret) < 32) {
+    throw new Error("PROVIDER_REVISION_SECRET harus minimal 32 byte");
+  }
+
+  return jwt.sign(
+    {
+      purpose: "PROVIDER_REVISION",
+      email_provider: provider.email_provider.trim().toLowerCase(),
+    },
+    secret,
+    {
+      algorithm: "HS256",
+      issuer: "stiQR-b2b",
+      audience: "provider-revision",
+      subject: String(provider.id_provider),
+      expiresIn: "15m",
+    },
+  );
+};
+
+// REVISION OTP
+export const requestProviderRevisionOtp = async (req, res) => {
+  const { id } = req.params;
+
+  if (!isValidId(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "ID provider tidak valid",
+    });
+  }
+
+  try {
+    const otpData = await providerModel.createProviderRevisionOtp(Number(id));
+
+    await sendOtpEmail(
+      otpData.email_provider,
+      otpData.otp,
+      otpData.name_provider,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP revisi telah dikirim ke email provider",
+      data: {
+        id_provider: Number(id),
+        otp_token: otpData.otp_token,
+        expires_in_seconds: otpData.expires_in_seconds,
+      },
+    });
+  } catch (error) {
+    console.error("Request revision OTP error:", error);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Gagal mengirim OTP revisi",
+    });
+  }
+};
+
+// VERIFY REVISION OTP
+export const verifyProviderRevisionOtp = async (req, res) => {
+  const { id } = req.params;
+
+  const { email_provider, otp, otp_token } = req.body ?? {};
+
+  if (
+    !isValidId(id) ||
+    typeof email_provider !== "string" ||
+    !email_provider.trim() ||
+    typeof otp_token !== "string" ||
+    !otp_token.trim() ||
+    !/^\d{6}$/.test(String(otp ?? ""))
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Data OTP revisi tidak valid",
+    });
+  }
+
+  try {
+    // Validate secret before verifying OTP
+    const secret = process.env.PROVIDER_REVISION_SECRET;
+
+    if (!secret || Buffer.byteLength(secret) < 32) {
+      throw new Error("PROVIDER_REVISION_SECRET belum dikonfigurasi");
+    }
+
+    const valid = await providerModel.verifyProviderRevisionOtp(
+      Number(id),
+      email_provider,
+      String(otp),
+      otp_token,
+    );
+
+    if (!valid) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP tidak valid atau sudah kedaluwarsa",
+      });
+    }
+
+    const provider = await providerModel.getProviderById(Number(id));
+
+    // Recheck status before issuing access token
+    if (!provider || provider.status_provider !== "REJECTED") {
+      return res.status(409).json({
+        success: false,
+        message: "Provider tidak sedang dalam tahap revisi",
+      });
+    }
+
+    const revisionToken = createRevisionAccessToken(provider);
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP revisi berhasil diverifikasi",
+      data: {
+        id_provider: Number(id),
+        status_provider: "REJECTED",
+        revision_token: revisionToken,
+        token_type: "Bearer",
+        expires_in_seconds: 900,
+      },
+    });
+  } catch (error) {
+    console.error("Verify revision OTP error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memverifikasi OTP revisi",
+    });
+  }
+};
+
+// RESUBMIT REJECTED PROVIDER
+export const resubmitProvider = async (req, res) => {
+  const { id } = req.params;
+
+  if (!isValidId(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "ID provider tidak valid",
+    });
+  }
+
+  try {
+    const provider = await providerModel.getProviderById(Number(id));
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider tidak ditemukan",
+      });
+    }
+
+    if (provider.status_provider !== "REJECTED") {
+      return res.status(409).json({
+        success: false,
+        message: "Resubmit hanya tersedia untuk provider REJECTED",
+      });
+    }
+
+    const requiredFields = [
+      "name_provider",
+      "email_provider",
+      "phone_number_provider",
+      "address_provider",
+      "id_provider_category",
+    ];
+
+    const missingFields = requiredFields.filter(
+      (field) =>
+        provider[field] === null ||
+        provider[field] === undefined ||
+        String(provider[field]).trim() === "",
+    );
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Data provider belum lengkap",
+        data: {
+          missing_fields: missingFields,
+        },
+      });
+    }
+
+    const updated = await providerModel.resubmitProvider(Number(id));
+
+    if (!updated) {
+      return res.status(409).json({
+        success: false,
+        message: "Resubmit gagal karena status provider telah berubah",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Revisi provider berhasil dikirim untuk approval ulang",
+      data: {
+        id_provider: Number(id),
+        previous_status: "REJECTED",
+        status_provider: "PENDING_APPROVAL",
       },
     });
   } catch (error) {
