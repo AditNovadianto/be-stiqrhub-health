@@ -79,7 +79,7 @@ const emailLayout = (title, content) => `
         color: #9ca3af;
         font-size: 12px;
       ">
-        STIQR Hub Health
+        STIQR Health
       </div>
     </div>
   </div>
@@ -381,7 +381,7 @@ export const sendForgotPasswordEmail = async (email, name, resetUrl) => {
 
       <p style="margin: 0 0 20px;">
         Kami menerima permintaan untuk mengatur
-        ulang password akun STIQR Hub Health kamu.
+        ulang password akun STIQR Health kamu.
       </p>
 
       <p style="margin: 0 0 26px;">
@@ -446,13 +446,13 @@ export const sendForgotPasswordEmail = async (email, name, resetUrl) => {
   );
 
   return transporter.sendMail({
-    from: `"STIQR Hub Health" <${process.env.EMAIL_USER}>`,
+    from: `"STIQR Health" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "Reset Password - STIQR Hub Health",
+    subject: "Reset Password - STIQR Health",
     text: [
       `Hi ${name},`,
       "",
-      "Kami menerima permintaan untuk mengatur ulang password akun STIQR Hub Health kamu.",
+      "Kami menerima permintaan untuk mengatur ulang password akun STIQR Health kamu.",
       "",
       "Silakan klik tombol di bawah ini untuk membuat password baru.",
       "",
