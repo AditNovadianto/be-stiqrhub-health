@@ -8,10 +8,23 @@ import {
   verifyById,
   redeemByQr,
   redeemById,
+  getAllHealthPassesAdmin,
+  finishById,
+  requestFinishOtp,
 } from "../controllers/healthPassesController.js";
 import { verifyToken } from "../middleware/auth.js";
 
 const router = express.Router();
+
+// ============================================================
+// ADMIN ROUTES
+// ============================================================
+
+router.get(
+  "/health-passes/admin/get-all",
+  verifyToken,
+  getAllHealthPassesAdmin,
+);
 
 // ============================================================
 // CUSTOMER ROUTES
@@ -43,5 +56,19 @@ router.post("/health-passes/provider/redeem/qr", verifyToken, redeemByQr);
 
 // Redeem menggunakan input ID.
 router.post("/health-passes/provider/redeem/id", verifyToken, redeemById);
+
+// REQUEST OTP FINISH TREATMENT
+router.post(
+  "/health-passes/provider/finish/:id_health_pass/request-otp",
+  verifyToken,
+  requestFinishOtp,
+);
+
+// FINISH TREATMENT
+router.patch(
+  "/health-passes/provider/finish/:id_health_pass",
+  verifyToken,
+  finishById,
+);
 
 export default router;

@@ -2,6 +2,8 @@ import jwt from "jsonwebtoken";
 
 import * as healthPassesModel from "../models/healthPassesModel.js";
 
+import { sendTreatmentFinishedEmail } from "../utils/mailer.js";
+
 // HELPERS
 const errorWithStatus = (message, statusCode) => {
   const error = new Error(message);
@@ -372,6 +374,132 @@ export async function redeemById(req, res) {
       success: true,
       message: "Health Pass berhasil diredeem melalui ID",
       data: result,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+// PROVIDER - REQUEST FINISH TREATMENT OTP
+export async function requestFinishOtp(req, res) {
+  try {
+    const { id_health_pass } = req.params;
+
+    if (!isValidString(id_health_pass)) {
+      throw errorWithStatus("ID Health Pass wajib diisi", 400);
+    }
+
+    const idProvider = getProviderId(req);
+
+    const idProviderUser = getProviderUserId(req);
+
+    const result = await healthPassesModel.requestFinishTreatmentOtp({
+      id_health_pass: id_health_pass.trim(),
+
+      id_provider: idProvider,
+
+      id_provider_user: idProviderUser,
+    });
+
+    return res.status(200).json({
+      success: true,
+
+      message: "Kode OTP konfirmasi treatment berhasil dikirim ke email pasien",
+
+      data: result,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+// PROVIDER
+// PROVIDER - FINISH TREATMENT WITH OTP
+export async function finishById(req, res) {
+  try {
+    const { id_health_pass } = req.params;
+
+    const { doctor_notes, otp, otp_token } = req.body || {};
+
+    if (!isValidString(id_health_pass)) {
+      throw errorWithStatus("ID Health Pass wajib diisi", 400);
+    }
+
+    if (!isValidString(doctor_notes)) {
+      throw errorWithStatus("Catatan treatment wajib diisi", 400);
+    }
+
+    const doctorNotes = doctor_notes.trim();
+
+    if (doctorNotes.length > 10000) {
+      throw errorWithStatus("Catatan treatment maksimal 10000 karakter", 400);
+    }
+
+    if (typeof otp !== "string" || !/^\d{6}$/.test(otp)) {
+      throw errorWithStatus("OTP harus terdiri dari 6 digit angka", 400);
+    }
+
+    if (!isValidString(otp_token)) {
+      throw errorWithStatus("otp_token wajib diisi", 400);
+    }
+
+    const result = await healthPassesModel.finishHealthPass({
+      id_health_pass: id_health_pass.trim(),
+      id_provider: getProviderId(req),
+      finished_by: getProviderUserId(req),
+      doctor_notes: doctorNotes,
+      otp,
+      otp_token,
+    });
+
+    // Pada titik ini transaksi database sudah COMMIT.
+    // Jika SMTP gagal, status FINISHED tetap tersimpan.
+
+    let notificationEmailSent = false;
+
+    if (result.notification?.email) {
+      try {
+        await sendTreatmentFinishedEmail({
+          email: result.notification.email,
+          name: result.notification.name,
+          healthPassId: result.notification.healthPassId,
+          serviceName: result.notification.serviceName,
+          providerName: result.notification.providerName,
+          treatmentDate: result.finished_at,
+        });
+
+        notificationEmailSent = true;
+      } catch (mailError) {
+        console.error("[TREATMENT FINISHED EMAIL ERROR]", mailError);
+      }
+    }
+
+    // Jangan mengembalikan informasi email internal
+    // dalam objek Health Pass pada response API.
+
+    const { notification, ...healthPassData } = result;
+
+    return res.status(200).json({
+      success: true,
+      message: "Treatment berhasil diselesaikan",
+      data: healthPassData,
+      notification_email_sent: notificationEmailSent,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+// GET ALL HEALTH PASSES
+export async function getAllHealthPassesAdmin(req, res) {
+  try {
+    // Ambil seluruh Health Pass tanpa pagination.
+    const healthPasses = await healthPassesModel.getAllHealthPassesForAdmin();
+
+    return res.status(200).json({
+      success: true,
+      message: "Daftar Health Pass berhasil diambil",
+      data: healthPasses,
     });
   } catch (error) {
     return handleError(res, error);

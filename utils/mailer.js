@@ -965,4 +965,559 @@ export const sendHealthPassEmail = async ({
   });
 };
 
+// ============================================================
+// SEND OTP EMAIL - FINISH TREATMENT
+// ============================================================
+
+export async function sendFinishTreatmentOtpEmail({
+  email,
+  name,
+  otp,
+  serviceName,
+  providerName,
+}) {
+  if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Email penerima OTP tidak valid");
+  }
+
+  if (typeof otp !== "string" || !/^\d{6}$/.test(otp)) {
+    throw new Error("Kode OTP harus terdiri dari 6 digit angka");
+  }
+
+  const safeName = escapeHtml(name || "Pasien");
+  const safeService = escapeHtml(serviceName || "Layanan kesehatan");
+  const safeProvider = escapeHtml(providerName || "Provider");
+  const safeOtp = escapeHtml(otp);
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="id">
+      <head>
+        <meta charset="UTF-8" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0"
+        />
+        <title>
+          Konfirmasi Penyelesaian Treatment - STIQR Health
+        </title>
+      </head>
+
+      <body style="
+        margin: 0;
+        padding: 0;
+        background-color: #F4F7FB;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #172B4D;
+      ">
+        <table
+          role="presentation"
+          cellpadding="0"
+          cellspacing="0"
+          border="0"
+          width="100%"
+          style="background-color: #F4F7FB;"
+        >
+          <tr>
+            <td align="center" style="padding: 32px 16px;">
+
+              <!-- MAIN CONTAINER -->
+              <table
+                role="presentation"
+                cellpadding="0"
+                cellspacing="0"
+                border="0"
+                width="100%"
+                style="
+                  max-width: 600px;
+                  background-color: #FFFFFF;
+                  border: 1px solid #E2EAF3;
+                  border-radius: 16px;
+                "
+              >
+                <tr>
+                  <td style="
+                    padding: 40px 32px;
+                    font-size: 15px;
+                    line-height: 1.75;
+                    color: #172B4D;
+                  ">
+
+                    <!-- LOGO -->
+                    <div style="
+                      margin: 0 0 32px;
+                      text-align: left;
+                    ">
+                      <img
+                        src="cid:${EMAIL_LOGO_CID}"
+                        alt="STIQR Health"
+                        width="115"
+                        style="
+                          display: block;
+                          width: 115px;
+                          max-width: 100%;
+                          height: auto;
+                          border: 0;
+                        "
+                      />
+                    </div>
+
+                    <!-- GREETING -->
+                    <p style="
+                      margin: 0 0 24px;
+                      font-size: 16px;
+                    ">
+                      Halo, <strong>${safeName}</strong>.
+                    </p>
+
+                    <!-- DESCRIPTION -->
+                    <p style="
+                      margin: 0 0 20px;
+                      font-size: 15px;
+                    ">
+                      Kami menerima permintaan konfirmasi
+                      penyelesaian treatment dari provider
+                      layanan kesehatan Anda.
+                    </p>
+
+                    <!-- TREATMENT DETAILS -->
+                    <div style="
+                      margin: 0 0 24px;
+                      padding: 18px 20px;
+                      background-color: #F8FAFD;
+                      border: 1px solid #E2EAF3;
+                      border-radius: 12px;
+                    ">
+                      <p style="
+                        margin: 0 0 12px;
+                        font-size: 13px;
+                        color: #64748B;
+                      ">
+                        Informasi Treatment
+                      </p>
+
+                      <p style="margin: 0 0 8px;">
+                        <strong>Provider:</strong>
+                        ${safeProvider}
+                      </p>
+
+                      <p style="margin: 0;">
+                        <strong>Layanan:</strong>
+                        ${safeService}
+                      </p>
+                    </div>
+
+                    <!-- OTP INSTRUCTION -->
+                    <p style="
+                      margin: 0 0 22px;
+                      font-size: 15px;
+                    ">
+                      Jika treatment Anda
+                      <strong>benar-benar telah selesai</strong>,
+                      berikan kode berikut kepada petugas
+                      yang menangani Anda sebagai konfirmasi
+                      penyelesaian layanan.
+                    </p>
+
+                    <!-- OTP CODE -->
+                    <div style="
+                      margin: 0 0 24px;
+                      padding: 22px 12px;
+                      background-color: #F0F6FF;
+                      border: 1px solid #DCEAFF;
+                      border-radius: 12px;
+                      text-align: center;
+                    ">
+                      <p style="
+                        margin: 0 0 10px;
+                        font-size: 13px;
+                        color: #64748B;
+                      ">
+                        Kode Konfirmasi Treatment
+                      </p>
+
+                      <span style="
+                        display: inline-block;
+                        font-size: 32px;
+                        font-weight: 600;
+                        letter-spacing: 7px;
+                        line-height: 1.4;
+                        color: #003A7A;
+                      ">
+                        ${safeOtp}
+                      </span>
+                    </div>
+
+                    <!-- EXPIRATION -->
+                    <p style="
+                      margin: 0 0 22px;
+                      font-size: 15px;
+                    ">
+                      Kode ini hanya berlaku selama
+                      <strong>5 menit</strong>.
+                    </p>
+
+                    <!-- SECURITY WARNING -->
+                    <div style="
+                      margin: 0 0 25px;
+                      padding: 16px 18px;
+                      background-color: #FFF8EB;
+                      border: 1px solid #FDE5B4;
+                      border-radius: 10px;
+                    ">
+                      <p style="
+                        margin: 0;
+                        font-size: 14px;
+                        line-height: 1.7;
+                        color: #92400E;
+                      ">
+                        <strong>Penting:</strong>
+                        Jangan berikan kode OTP apabila
+                        treatment belum selesai atau
+                        Anda tidak mengenali permintaan ini.
+                        Kode ini hanya digunakan untuk
+                        konfirmasi penyelesaian treatment,
+                        bukan untuk login atau pembayaran.
+                      </p>
+                    </div>
+
+                    <!-- HELP -->
+                    <p style="
+                      margin: 0 0 24px;
+                      font-size: 15px;
+                    ">
+                      Jika Anda mengalami kendala atau
+                      tidak merasa melakukan treatment
+                      tersebut, silakan hubungi dukungan
+                      STIQR Health.
+                    </p>
+
+                    <!-- AUTOMATED MESSAGE -->
+                    <p style="
+                      margin: 0 0 38px;
+                      font-size: 15px;
+                    ">
+                      Email ini dibuat secara otomatis.
+                      Mohon untuk tidak membalas.
+                    </p>
+
+                    <!-- TAGLINE -->
+                    <p style="
+                      margin: 0 0 40px;
+                      font-size: 15px;
+                      font-style: italic;
+                      font-weight: 700;
+                      color: #003A7A;
+                    ">
+                      Sehat Lebih Dekat, Hidup Lebih Baik
+                    </p>
+
+                    <!-- SIGNATURE -->
+                    <p style="
+                      margin: 0;
+                      font-size: 17px;
+                      font-weight: 600;
+                      color: #003A7A;
+                    ">
+                      STIQR Health
+                    </p>
+
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const text = [
+    "STIQR Health",
+    "",
+    `Halo, ${name || "Pasien"}.`,
+    "",
+    "Kami menerima permintaan konfirmasi penyelesaian treatment.",
+    "",
+    `Provider: ${providerName || "Provider"}`,
+    `Layanan: ${serviceName || "Layanan kesehatan"}`,
+    "",
+    "Jika treatment benar-benar telah selesai,",
+    "berikan kode berikut kepada petugas:",
+    "",
+    `Kode OTP: ${otp}`,
+    "",
+    "Kode ini berlaku selama 5 menit.",
+    "",
+    "PENTING:",
+    "Jangan berikan OTP apabila treatment belum selesai",
+    "atau Anda tidak mengenali permintaan ini.",
+    "",
+    "Kode ini bukan untuk login atau pembayaran.",
+    "",
+    "Email ini dibuat secara otomatis. Mohon tidak membalas.",
+    "",
+    "Sehat Lebih Dekat, Hidup Lebih Baik",
+    "",
+    "STIQR Health",
+  ].join("\n");
+
+  return transporter.sendMail({
+    from: `"STIQR Health" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: "Kode OTP Konfirmasi Treatment - STIQR Health",
+    text,
+    html,
+    attachments: [
+      {
+        filename: "logo-stiqrhub-health.jpeg",
+        path: EMAIL_LOGO_PATH,
+        cid: EMAIL_LOGO_CID,
+        contentType: "image/jpeg",
+        contentDisposition: "inline",
+      },
+    ],
+  });
+}
+
+// ============================================================
+// SEND EMAIL - TREATMENT FINISHED
+// ============================================================
+
+export async function sendTreatmentFinishedEmail({
+  email,
+  name,
+  healthPassId,
+  serviceName,
+  providerName,
+  treatmentDate,
+}) {
+  if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Email pasien tidak valid");
+  }
+
+  const safeName = escapeHtml(name || "Pengguna");
+  const safeService = escapeHtml(serviceName || "Layanan kesehatan");
+  const safeProvider = escapeHtml(providerName || "Klinik / Provider");
+  const safeHealthPass = escapeHtml(healthPassId || "-");
+
+  const date = treatmentDate ? new Date(treatmentDate) : null;
+
+  const formattedDate =
+    date && !Number.isNaN(date.getTime())
+      ? new Intl.DateTimeFormat("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          timeZone: "Asia/Jakarta",
+        }).format(date)
+      : "-";
+
+  const safeDate = escapeHtml(formattedDate);
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="id">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport"
+          content="width=device-width, initial-scale=1.0" />
+        <title>Treatment Selesai - STIQR Health</title>
+      </head>
+
+      <body style="
+        margin:0;
+        padding:0;
+        background:#F4F7FB;
+        font-family:Arial,Helvetica,sans-serif;
+        color:#172B4D;
+      ">
+        <table role="presentation"
+          cellpadding="0"
+          cellspacing="0"
+          border="0"
+          width="100%">
+          <tr>
+            <td align="center" style="padding:32px 16px;">
+
+              <table role="presentation"
+                cellpadding="0"
+                cellspacing="0"
+                border="0"
+                width="100%"
+                style="
+                  max-width:600px;
+                  background:#FFFFFF;
+                  border:1px solid #E2EAF3;
+                  border-radius:16px;
+                ">
+                <tr>
+                  <td style="
+                    padding:40px 32px;
+                    font-size:15px;
+                    line-height:1.75;
+                  ">
+
+                    <!-- LOGO -->
+                    <div style="margin-bottom:32px;">
+                      <img
+                        src="cid:${EMAIL_LOGO_CID}"
+                        alt="STIQR Health"
+                        width="115"
+                        style="
+                          display:block;
+                          width:115px;
+                          height:auto;
+                          border:0;
+                        "
+                      />
+                    </div>
+
+                    <!-- GREETING -->
+                    <p style="margin:0 0 24px;">
+                      Halo, <strong>${safeName}</strong>.
+                    </p>
+
+                    <!-- THANK YOU -->
+                    <p style="
+                      margin:0 0 24px;
+                      font-size:16px;
+                      font-style:italic;
+                      font-weight:700;
+                      color:#003A7A;
+                      line-height:1.6;
+                    ">
+                      Terima kasih sudah menggunakan
+                      Health Pass dari STIQR Health
+                      untuk menikmati treatment pilihanmu!
+                    </p>
+
+                    <p style="margin:0 0 16px;">
+                      Ini detail treatment kamu:
+                    </p>
+
+                    <!-- TREATMENT DETAILS -->
+                    <table role="presentation"
+                      cellpadding="0"
+                      cellspacing="0"
+                      border="0"
+                      width="100%"
+                      style="
+                        margin-bottom:24px;
+                        background:#F8FAFD;
+                        border:1px solid #E2EAF3;
+                        border-radius:12px;
+                      ">
+                      <tr>
+                        <td style="padding:18px 20px;">
+
+                          <p style="margin:0 0 10px;">
+                            <strong>Health Pass:</strong>
+                            ${safeHealthPass}
+                          </p>
+
+                          <p style="margin:0 0 10px;">
+                            <strong>Treatment:</strong>
+                            ${safeService}
+                          </p>
+
+                          <p style="margin:0 0 10px;">
+                            <strong>Klinik:</strong>
+                            ${safeProvider}
+                          </p>
+
+                          <p style="margin:0;">
+                            <strong>Tanggal Treatment:</strong>
+                            ${safeDate}
+                          </p>
+
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:0 0 22px;">
+                      Terima kasih telah mempercayakan
+                      kebutuhan treatment kamu kepada
+                      STIQR Health.
+                    </p>
+
+                    <p style="margin:0 0 30px;">
+                      Yuk, nikmati pengalaman treatment
+                      lainnya dengan harga terbaik dari
+                      STIQR Health!
+                    </p>
+
+                    <!-- TAGLINE -->
+                    <p style="
+                      margin:0 0 38px;
+                      font-size:15px;
+                      font-style:italic;
+                      font-weight:700;
+                      color:#003A7A;
+                    ">
+                      Sehat Lebih Dekat, Hidup Lebih Baik.
+                    </p>
+
+                    <!-- SIGNATURE -->
+                    <p style="
+                      margin:0;
+                      font-size:17px;
+                      font-weight:700;
+                      color:#003A7A;
+                    ">
+                      STIQR Health
+                    </p>
+
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const text = [
+    "STIQR Health",
+    "",
+    `Halo, ${name || "Pengguna"}.`,
+    "",
+    "Terima kasih sudah menggunakan Health Pass dari STIQR Health untuk menikmati treatment pilihanmu!",
+    "",
+    "Ini detail treatment kamu:",
+    `Health Pass: ${healthPassId || "-"}`,
+    `Treatment: ${serviceName || "-"}`,
+    `Klinik: ${providerName || "-"}`,
+    `Tanggal Treatment: ${formattedDate}`,
+    "",
+    "Terima kasih telah mempercayakan kebutuhan treatment kamu kepada STIQR Health.",
+    "",
+    "Yuk, nikmati pengalaman treatment lainnya dengan harga terbaik dari STIQR Health!",
+    "",
+    "Sehat Lebih Dekat, Hidup Lebih Baik.",
+    "",
+    "STIQR Health",
+  ].join("\n");
+
+  return transporter.sendMail({
+    from: `"STIQR Health" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: "Terima Kasih! Treatment Kamu Telah Selesai - STIQR Health",
+    html,
+    text,
+    attachments: [
+      {
+        filename: "logo-stiqrhub-health.jpeg",
+        path: EMAIL_LOGO_PATH,
+        cid: EMAIL_LOGO_CID,
+        contentType: "image/jpeg",
+        contentDisposition: "inline",
+      },
+    ],
+  });
+}
+
 export { transporter };
