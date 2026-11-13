@@ -156,7 +156,7 @@ export async function transferToBank(payout) {
     additionalInfo: {
       fundType: "MERCHANT_WITHDRAW_FOR_CORPORATE",
       chargeTarget: process.env.DANA_DISBURSEMENT_CHARGE_TARGET || "MERCHANT",
-      needNotify: false,
+      needNotify: process.env.DANA_DISBURSEMENT_NOTIFY_ENABLED === "true",
       beneficiaryAccountName: String(payout.account_holder_name).slice(0, 64),
     },
   };

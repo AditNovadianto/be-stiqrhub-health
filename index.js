@@ -28,6 +28,7 @@ import { startProviderSettlementCron } from "./jobs/providerSettlementCron.js";
 import danaRoute from "./3rd/dana/routes/danaRoute.js";
 import danaPaymentRoute from "./3rd/dana/routes/danaPaymentRoute.js";
 import { finishNotify } from "./3rd/dana/controllers/danaPaymentController.js";
+import { transferBankNotify } from "./3rd/dana/controllers/danaDisbursementNotifyController.js";
 
 // Nobu Route
 import nobuQrisRoute from "./3rd/nobu/routes/nobuQrisRoute.js";
@@ -89,6 +90,8 @@ app.use("/api/dana", danaRoute);
 app.use("/api/dana/payment", danaPaymentRoute);
 
 app.post("/v1.0/debit/notify", finishNotify);
+
+app.post("/v1.0/debit/emoney/transfer-bank/notify.htm", transferBankNotify);
 
 // Nobu Route
 app.use("/api/nobu/qris", nobuQrisRoute);
